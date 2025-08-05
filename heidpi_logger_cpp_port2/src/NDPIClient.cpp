@@ -8,6 +8,8 @@
 #include <sstream>
 #include <iomanip>
 #include <stdexcept>
+#include <algorithm>
+#include <cctype>
 
 NDPIClient::NDPIClient() {}
 NDPIClient::~NDPIClient() { if (fd >= 0) ::close(fd); }
@@ -45,9 +47,13 @@ void NDPIClient::loop(const std::function<void(const nlohmann::json &)> &cb, con
     }
 
     while (true) {
-        char lenbuf[7];
+        char lenbuf[7] = {};
         ssize_t n = ::recv(fd, lenbuf, 6, MSG_WAITALL);
         if (n <= 0) break;
+        if (n != 6) break;
+        if (!std::all_of(lenbuf, lenbuf + 6,
+                         [](unsigned char c) { return std::isdigit(c); }))
+            break;
         lenbuf[6] = '\0';
         size_t len = std::stoul(lenbuf);
         std::string payload(len, '\0');
