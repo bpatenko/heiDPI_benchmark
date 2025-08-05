@@ -1,0 +1,56 @@
+appName: heiDPI
+
+# Leave *_event_name empty to process all events of that type
+
+logging:
+  level: INFO
+  encoding: utf-8
+  format: "%(asctime)s %(levelname)s:%(message)s"
+  datefmt: "%Y-%m-%dT%I:%M:%S"
+  # filemode: w # a for append, will not override current file
+  # filename: heiDPI.log
+
+flow_event:
+  ignore_fields: []
+  ignore_risks: []
+  flow_event_name:
+    - update
+    - end
+    - idle
+    - detected
+    - detection-update
+  filename: flow_event
+  geoip2_city:
+    enabled: True
+    filepath: /tmp/city.mmdb
+    keys:
+      - country.names.en
+      # Additional configurations
+      - location
+      # - city
+      # - traits
+      # - postal
+  threads: 4
+
+daemon_event:
+  ignore_fields: []
+  daemon_event_name:
+    - init
+    - status
+  filename: daemon_event
+  threads: 4
+
+packet_event:
+  ignore_fields: []
+  packet_event_name:
+    - packet-flow
+  filename: packet_event
+  threads: 4
+
+error_event:
+  ignore_fields: []
+  error_event_name:
+    - error-flow
+  filename: error_event
+ 
+  threads: 4

@@ -1,0 +1,36 @@
+# === Build-Ordner ===
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+Makefile
+CTestTestfile.cmake
+install_manifest.txt
+
+# === CLion / JetBrains ===
+.idea/
+*.iml
+
+# === Compiler ===
+*.o
+*.obj
+*.so
+*.a
+*.lib
+*.dll
+*.exe
+*.out
+
+# === Logs und temporäre Dateien ===
+*.log
+*.tmp
+*.swp
+*.swo
+
+# === macOS / Linux / Windows generische Dateien ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Sonstiges ===
+.vscode/

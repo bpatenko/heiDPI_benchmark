@@ -1,0 +1,23 @@
+{
+  "mode": "manual",
+  "interval": 30,
+  "scenarios": [
+    {
+      "mode": "IDLE",
+      "idle_rate": 1
+    },
+    {
+      "mode": "BURST",
+      "burst_rate": 1000,
+      "idle_rate_burst": 350,
+      "burst_len": 250,
+      "idle_len": 750
+    },
+    {
+      "mode": "RAMP",
+      "start_rate": 10,
+      "end_rate": 500,
+      "ramp_dur": 10
+    }
+  ]
+}

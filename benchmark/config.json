@@ -1,0 +1,15 @@
+{
+  "loggerType": "binary",
+  "loggerModule": "heiDPI_logger",
+  "loggerBinary": "heiDPI_logger.bin",
+  "loggerConfigPath": "config.yml",
+  "outputFilePath": "flow_event.json",
+  "scenarioPath": "scenarios.json",
+
+  "generatorParams": {
+    "host": "127.0.0.1",
+    "port": 7000,
+    "rate": 2.0,
+    "message_size": 128
+  }
+}

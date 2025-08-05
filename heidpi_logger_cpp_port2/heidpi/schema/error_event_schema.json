@@ -1,0 +1,186 @@
+{
+    "type": "object",
+    "required": [
+        "alias",
+        "source",
+        "packet_id",
+        "error_event_id",
+        "error_event_name",
+        "datalink",
+        "threshold_n",
+        "threshold_n_max",
+        "threshold_time",
+        "threshold_ts_usec",
+        "global_ts_usec"
+    ],
+
+    "if": {
+        "properties": { "error_event_name": { "enum": [ "Unknown datalink layer packet", "Unknown packet type" ] } }
+    },
+    "then": {
+        "anyOf": [
+            { "required": [ "layer_type" ] },
+            { "not": { "required": [ "thread_id" ] } }
+        ]
+    },
+
+    "if": {
+        "properties": { "error_event_name": { "enum": [ "Unknown L3 protocol" ] } }
+    },
+    "then": {
+        "anyOf": [
+            { "required": [ "protocol" ] },
+            { "not": { "required": [ "thread_id" ] } }
+        ]
+    },
+
+    "if": {
+        "properties": { "error_event_name": { "enum": [ "Packet too short", "IP4 packet too short",
+                                                        "IP6 packet too short", "TCP packet smaller than expected",
+                                                        "UDP packet smaller than expected",
+                                                        "Captured packet size is smaller than expected packet size" ] } }
+    },
+    "then": {
+        "anyOf": [
+            { "required": [ "size", "expected" ] },
+            { "not": { "required": [ "thread_id" ] } }
+        ]
+    },
+
+    "if": {
+        "properties": { "error_event_name": { "enum": [ "Packet header invalid" ] } }
+    },
+    "then": {
+        "anyOf": [
+            { "required": [ "raeson" ] },
+            { "not": { "required": [ "thread_id" ] } }
+        ]
+    },
+
+    "if": {
+        "properties": { "error_event_name": { "enum": [ "Flow memory allocation failed" ] } }
+    },
+    "then": {
+        "required": [ "thread_id", "size" ]
+    },
+
+    "if": {
+        "properties": { "error_event_name": { "enum": [ "Max flows to track reached" ] } }
+    },
+    "then": {
+        "required": [ "thread_id", "current_active", "current_idle", "max_active", "max_idle" ]
+    },
+
+    "properties": {
+        "alias": {
+            "type": "string"
+        },
+        "source": {
+            "type": "string"
+        },
+        "thread_id": {
+            "type": "number"
+        },
+        "packet_id": {
+            "type": "number",
+            "minimum": 0
+        },
+        "error_event_id": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 16
+        },
+        "error_event_name": {
+            "type": "string",
+            "enum": [
+                "Unknown datalink layer packet",
+                "Unknown L3 protocol",
+                "Unsupported datalink layer",
+                "Packet too short",
+                "Unknown packet type",
+                "Packet header invalid",
+                "IP4 packet too short",
+                "Packet smaller than IP4 header",
+                "nDPI IPv4/L4 payload detection failed",
+                "IP6 packet too short",
+                "Packet smaller than IP6 header",
+                "nDPI IPv6/L4 payload detection failed",
+                "TCP packet smaller than expected",
+                "UDP packet smaller than expected",
+                "Captured packet size is smaller than expected packet size",
+                "Max flows to track reached",
+                "Flow memory allocation failed"
+            ]
+        },
+
+        "datalink": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 292
+        },
+
+        "threshold_n": {
+            "type": "number",
+            "minimum": 1
+        },
+
+        "threshold_n_max": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 65535
+        },
+
+        "threshold_time": {
+            "type": "number"
+        },
+
+        "threshold_ts_usec": {
+            "type": "number"
+        },
+
+        "layer_type": {
+            "type": "number",
+            "minimum": 0
+        },
+
+        "l4_data_len": {
+            "type": "number",
+            "minimum": 0
+        },
+
+        "reason": {
+            "type": "string"
+        },
+
+        "protocol": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 65535
+        },
+
+        "size": {
+            "type": "number"
+        },
+        "expected": {
+            "type": "number"
+        },
+
+        "current_active": {
+            "type": "number"
+        },
+        "current_idle": {
+            "type": "number"
+        },
+        "max_active": {
+            "type": "number"
+        },
+        "max_idle": {
+            "type": "number"
+        },
+        "global_ts_usec": {
+            "type": "number",
+            "minimum": 0
+        }
+    },
+    "additionalProperties": false
+}

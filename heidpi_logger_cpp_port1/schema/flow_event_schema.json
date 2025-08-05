@@ -1,0 +1,472 @@
+{
+    "type": "object",
+    "required": [
+        "alias",
+        "source",
+        "thread_id",
+        "packet_id",
+        "flow_event_id",
+        "flow_event_name",
+        "flow_id",
+        "flow_state",
+        "flow_src_packets_processed",
+        "flow_dst_packets_processed",
+        "flow_first_seen",
+        "flow_src_last_pkt_time",
+        "flow_dst_last_pkt_time",
+        "flow_idle_time",
+        "flow_src_min_l4_payload_len",
+        "flow_dst_min_l4_payload_len",
+        "flow_src_max_l4_payload_len",
+        "flow_dst_max_l4_payload_len",
+        "flow_src_tot_l4_payload_len",
+        "flow_dst_tot_l4_payload_len",
+        "l3_proto",
+        "l4_proto",
+        "midstream",
+        "thread_ts_usec",
+        "src_ip",
+        "dst_ip"
+    ],
+
+    "if": {
+        "properties": { "flow_event_name": { "enum": [ "new", "end", "idle", "update" ] } }
+    },
+    "then": {
+        "required": [ "flow_datalink", "flow_max_packets" ]
+    },
+
+    "if": {
+        "properties": { "flow_event_name": { "enum": [ "analyse" ] } }
+    },
+    "then": {
+        "required": [ "data_analysis" ]
+    },
+
+    "if": {
+        "properties": { "flow_state": { "enum": [ "finished" ] } }
+    },
+    "then": {
+        "required": [ "ndpi" ]
+    },
+
+    "if": {
+        "properties": { "flow_event_name": { "enum": [ "guessed", "detected",
+                                                       "detection-update", "not-detected" ] } }
+    },
+    "then": {
+        "required": [ "ndpi" ]
+    },
+
+    "properties": {
+        "alias": {
+            "type": "string"
+        },
+        "source": {
+            "type": "string"
+        },
+        "thread_id": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 31
+        },
+        "packet_id": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_event_id": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9
+        },
+        "flow_event_name": {
+            "type": "string",
+            "enum": [
+                "invalid",
+                "new",
+                "end",
+                "idle",
+                "update",
+                "analyse",
+                "guessed",
+                "detected",
+                "detection-update",
+                "not-detected"
+            ]
+        },
+        "flow_id": {
+            "type": "number",
+            "minimum": 1
+        },
+        "flow_state": {
+            "type": "string",
+            "enum": [
+                "finished",
+                "info"
+            ]
+        },
+        "flow_datalink": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 292
+        },
+        "flow_src_packets_processed": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_dst_packets_processed": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_max_packets": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_first_seen": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_src_last_pkt_time": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_dst_last_pkt_time": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_idle_time": {
+            "type": "number",
+            "minimum": 1
+        },
+        "flow_src_min_l4_payload_len": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_dst_min_l4_payload_len": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_src_max_l4_payload_len": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_dst_max_l4_payload_len": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_src_tot_l4_payload_len": {
+            "type": "number",
+            "minimum": 0
+        },
+        "flow_dst_tot_l4_payload_len": {
+            "type": "number",
+            "minimum": 0
+        },
+        "l3_proto": {
+            "type": "string",
+            "enum": [
+                "ip4",
+                "ip6",
+                "unknown"
+            ]
+        },
+        "l4_proto": {
+            "oneOf": [
+                {
+                    "type": "number"
+                },
+                {
+                    "type": "string",
+                    "enum": [
+                        "tcp",
+                        "udp",
+                        "icmp",
+                        "icmp6"
+                    ]
+                }
+            ]
+        },
+        "midstream": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+        },
+        "thread_ts_usec": {
+            "type": "number",
+            "minimum": 0
+        },
+        "src_ip": {
+            "type": "string",
+            "anyOf" : [
+                { "format": "ipv4" },
+                { "format": "ipv6" }
+            ]
+        },
+        "dst_ip": {
+            "type": "string",
+            "anyOf" : [
+                { "format": "ipv4" },
+                { "format": "ipv6" }
+            ]
+        },
+        "src_port": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 65535
+        },
+        "dst_port": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 65535
+        },
+        "ndpi": {
+            "type": "object",
+            "required": [ "proto", "proto_id", "breed", "encrypted" ],
+
+            "properties": {
+                "proto": {
+                    "type": "string"
+                },
+                "proto_id": {
+                    "type": "string"
+                },
+                "proto_by_ip": {
+                    "type": "string"
+                },
+                "proto_by_ip_id": {
+                    "type": "number"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "category_id": {
+                    "type": "number"
+                },
+                "encrypted": {
+                    "type": "number",
+                    "enum": [
+                        0,
+                        1
+                    ]
+                },
+                "breed": {
+                    "type": "string"
+                },
+                "flow_risk": {
+                    "type": "object"
+                },
+                "confidence": {
+                    "type": "object",
+                    "properties": {
+                        "0": {
+                            "type": "string"
+                        },
+                        "1": {
+                            "type": "string"
+                        },
+                        "2": {
+                            "type": "string"
+                        },
+                        "3": {
+                            "type": "string"
+                        },
+                        "4": {
+                            "type": "string"
+                        },
+                        "5": {
+                            "type": "string"
+                        },
+                        "6": {
+                            "type": "string"
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "entropy": {
+                    "type": "number"
+                },
+                "hostname": {
+                    "type": "string"
+                },
+                "collectd": {
+                    "type": "object"
+                },
+                "dhcp": {
+                    "type": "object"
+                },
+                "discord": {
+                    "type": "object"
+                },
+                "bittorrent": {
+                    "type": "object"
+                },
+                "mdns": {
+                    "type": "object"
+                },
+                "natpmp": {
+                    "type": "object"
+                },
+                "ntp": {
+                    "type": "object"
+                },
+                "ubntac2": {
+                    "type": "object"
+                },
+                "kerberos": {
+                    "type": "object"
+                },
+                "telnet": {
+                    "type": "object"
+                },
+                "tls": {
+                    "type": "object"
+                },
+                "quic": {
+                    "type": "object"
+                },
+                "imap": {
+                    "type": "object"
+                },
+                "http": {
+                    "type": "object"
+                },
+                "pop": {
+                    "type": "object"
+                },
+                "smtp": {
+                    "type": "object"
+                },
+                "dns": {
+                    "type": "object"
+                },
+                "ftp": {
+                    "type": "object"
+                },
+                "snmp": {
+                    "type": "object"
+                },
+                "ssh": {
+                    "type": "object"
+                },
+                "stun": {
+                    "type": "object"
+                },
+                "softether": {
+                    "type": "object"
+                },
+                "tftp": {
+                    "type": "object"
+                },
+                "tivoconnect": {
+                    "type": "object"
+                },
+                "rsh": {
+                    "type": "object"
+                }
+            },
+            "additionalProperties": false
+        },
+        "data_analysis": {
+            "type": "object",
+            "required": [ "iat", "pktlen", "bins", "directions" ],
+
+            "properties": {
+                "iat": {
+                    "type": "object",
+
+                    "properties": {
+                        "min": {
+                            "type": "number"
+                        },
+                        "avg": {
+                            "type": "number"
+                        },
+                        "max": {
+                            "type": "number"
+                        },
+                        "stddev": {
+                            "type": "number"
+                        },
+                        "var": {
+                            "type": "number"
+                        },
+                        "ent": {
+                            "type": "number"
+                        },
+                        "data": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            }
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "pktlen": {
+                    "type": "object",
+
+                    "properties": {
+                        "min": {
+                            "type": "number"
+                            },
+                        "avg": {
+                            "type": "number"
+                        },
+                        "max": {
+                            "type": "number"
+                        },
+                        "stddev": {
+                            "type": "number"
+                        },
+                        "var": {
+                            "type": "number"
+                        },
+                        "ent": {
+                            "type": "number"
+                        },
+                        "data": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            }
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "bins": {
+                    "type": "object",
+
+                    "properties": {
+                        "c_to_s": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            }
+                        },
+                        "s_to_c": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            }
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "directions": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "entropies": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                }
+            },
+            "additionalProperties": false
+        }
+    },
+    "additionalProperties": false
+}
