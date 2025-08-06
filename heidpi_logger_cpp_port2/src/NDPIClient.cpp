@@ -45,19 +45,21 @@ void NDPIClient::loop(const std::function<void(const nlohmann::json &)> &cb, con
     }
 
     while (true) {
-        char lenbuf[7];
-        ssize_t n = ::recv(fd, lenbuf, 6, MSG_WAITALL);
+        char lenbuf[6];
+        // Der Generator verwendet immer fünf Ziffern für die Länge
+        ssize_t n = ::recv(fd, lenbuf, 5, MSG_WAITALL);
         if (n <= 0) break;
-        lenbuf[6] = '\0';
+        lenbuf[5] = '\0';
         size_t len = std::stoul(lenbuf);
+        // anschließend die JSON‑Nutzlast lesen (inklusive '{')
         std::string payload(len, '\0');
         n = ::recv(fd, payload.data(), len, MSG_WAITALL);
         if (n <= 0) break;
         try {
-            nlohmann::json j = nlohmann::json::parse(payload);
+            auto j = nlohmann::json::parse(payload);
             cb(j);
         } catch (...) {
-            // ignore parse errors
+            // JSON‑Fehler ignorieren
         }
     }
 }
