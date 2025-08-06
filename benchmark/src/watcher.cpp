@@ -99,12 +99,37 @@ static bool readProcMem(pid_t pid, uint64_t& memKb) {
     while (f >> key) {
         if (key == "VmRSS:") {
             f >> memKb;
+            // Einheit (kB) verwerfen
+            std::string unit;
+            f >> unit;
             return true;
         }
         std::string rest;
         std::getline(f, rest);
     }
     return false;
+}
+
+static bool readProcMemTree(pid_t pid, uint64_t& totalKb) {
+    totalKb = 0;
+    uint64_t mem = 0;
+    readProcMem(pid, mem);
+    totalKb += mem;
+
+    // Kinder aus /proc/<pid>/task/<pid>/children lesen
+    std::string childrenPath = "/proc/" + std::to_string(pid)
+                               + "/task/" + std::to_string(pid)
+                               + "/children";
+    std::ifstream cf(childrenPath);
+    if (cf.is_open()) {
+        pid_t child;
+        while (cf >> child) {
+            uint64_t childMem = 0;
+            readProcMemTree(child, childMem);
+            totalKb += childMem;
+        }
+    }
+    return true;
 }
 
 // The watcher monitors the given file via inotify. Whenever the file is modified
@@ -170,7 +195,7 @@ void startWatcher(const std::string& path,
         FD_ZERO(&rfds);
         FD_SET(fd, &rfds);
 
-        // Wait for at most one second so we can periodically check `running`.
+        // Warte bis zu einer Sekunde, damit wir periodisch running prüfen können.
         struct timeval tv {1, 0};
         int ret = select(fd + 1, &rfds, nullptr, nullptr, &tv);
 
@@ -180,7 +205,7 @@ void startWatcher(const std::string& path,
                 continue;
             }
 
-            // Consume all newly appended lines
+            // Alle neu angehängten Zeilen verarbeiten
             std::string line;
             while (std::getline(in, line)) {
                 uint64_t watchTs = currentTimeUSec();
@@ -200,7 +225,7 @@ void startWatcher(const std::string& path,
                 out << outObj.dump() << std::endl;
                 queue.enqueue(Sample{pktId, genTs, watchTs});
             }
-            // Reset EOF flag so getline works after new data is appended
+            // EOF-Flag zurücksetzen, damit getline nach neuen Daten funktioniert
             in.clear();
         }
 
@@ -228,7 +253,8 @@ void startWatcher(const std::string& path,
             uint64_t procMem = 0;
             readSystemMem(sysMem);
             if (loggerPid > 0) {
-                readProcMem(loggerPid, procMem);
+                // NEU: Speicher des gesamten Prozessbaums erfassen
+                readProcMemTree(loggerPid, procMem);
             }
 
             json statObj = {
@@ -241,6 +267,7 @@ void startWatcher(const std::string& path,
             out << statObj.dump() << std::endl;
         }
     }
+
 
     out.flush();
     inotify_rm_watch(fd, wd);
