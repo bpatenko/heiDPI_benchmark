@@ -74,9 +74,10 @@ pid_t launchBinaryLoggerStrace(const std::string& path,
                                const std::string& configPath) {
     pid_t pid = fork();
     if (pid == 0) {
+        std::string absPath = std::filesystem::absolute(path).string();
         execlp("strace", "strace",
                "-f", "-c", "-o", "strace_summary.log",
-               path.c_str(),
+               absPath.c_str(),
                "--host", host.c_str(),
                "--port", std::to_string(port).c_str(),
                "--write", ".",
