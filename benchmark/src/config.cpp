@@ -21,6 +21,7 @@ Config loadConfig(const std::string& path) {
         cfg.loggerConfigPath = "config.yml";
         cfg.outputFilePath   = "flow_event.json";
         cfg.scenarioPath     = "scenarios.json";
+        cfg.straceEnabled    = false;
         cfg.generatorParams  = {"127.0.0.1", 7000, 1.0, 128};
         return cfg;
     }
@@ -36,6 +37,7 @@ Config loadConfig(const std::string& path) {
     cfg.loggerConfigPath = j.value("loggerConfigPath", "config.yml");
     cfg.outputFilePath   = j.value("outputFilePath", "flow_event.json");
     cfg.scenarioPath     = j.value("scenarioPath", "scenarios.json");
+    cfg.straceEnabled    = (j.value("strace", "disabled") == "enabled");
 
     // Generator-Params
     auto gj = j["generatorParams"];
