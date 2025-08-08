@@ -15,6 +15,10 @@ from heidpi import App
 from heidpi import heiDPIsrvd
 from heidpi import heiDPI_env
 
+import cProfile
+import uuid
+
+
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 7000
 DEFAULT_UNIX = '/tmp/ndpid-distributor.sock'
@@ -29,7 +33,7 @@ def file_path(string):
     if os.path.isfile(string):
         return string
     else:
-       raise FileNotFoundError(string)
+        raise FileNotFoundError(string)
 
 def get_timestamp():
     date_time = datetime.datetime.fromtimestamp(datetime.datetime.now().timestamp())
@@ -38,31 +42,31 @@ def get_timestamp():
 def heidpi_log_event(config_dict, json_dict, additional_processing):
     json_dict_copy = copy.deepcopy(json_dict)
     json_dict_copy['timestamp'] = get_timestamp()
-    
+
     if additional_processing != None:
         additional_processing(config_dict, json_dict_copy)
-    
+
     ignore_fields = config_dict["ignore_fields"]
-    if ignore_fields != []:   
+    if ignore_fields != []:
         list(map(json_dict_copy.pop, ignore_fields, [None] * len(ignore_fields)))
 
     with open(f'{JSON_PATH}/{config_dict["filename"]}.json', "a") as f:
         json.dump(json_dict_copy, f)
         f.write("\n")
-    
+
     del json_dict_copy
     gc.collect()
-    
+
 def heidpi_flow_processing(config_dict: dict, json_dict: dict):
     if bool(config_dict["geoip2_city"]["enabled"]):
         response = {}
-        try: 
+        try:
             reader = geoip2.database.Reader(config_dict['geoip2_city']["filepath"])
-        
+
             response = reader.city(str(json_dict["src_ip"])).raw
-            
+
             json_dict["src_geoip2_city"] = {}
-            
+
             for keys in config_dict["geoip2_city"]["keys"]:
                 if "." in keys:
                     current_data = response
@@ -94,9 +98,9 @@ def heidpi_flow_processing(config_dict: dict, json_dict: dict):
 
         try:
             response = reader.city(str(json_dict["dst_ip"])).raw
-            
+
             json_dict["dst_geoip2_city"] = {}
-            
+
             for keys in config_dict["geoip2_city"]["keys"]:
                 if "." in keys:
                     current_data = response
@@ -121,13 +125,13 @@ def heidpi_flow_processing(config_dict: dict, json_dict: dict):
             logging.debug(f"No record found for dst_ip:{json_dict['dst_ip']}")
         except  Exception as e:
             logging.exception(f"Exception: {e}")
-            
+
         del response
         del reader
         gc.collect()
 
     # Filter risks, normally applied to flow events
-    if "ndpi" in json_dict and "flow_risk" in json_dict["ndpi"] and config_dict["ignore_risks"] != []:   
+    if "ndpi" in json_dict and "flow_risk" in json_dict["ndpi"] and config_dict["ignore_risks"] != []:
         list(map(json_dict["ndpi"]["flow_risk"].pop, config_dict["ignore_risks"], [None] * len(config_dict["ignore_risks"])))
 
 def heidpi_worker(address, function, filter):
@@ -137,11 +141,26 @@ def heidpi_worker(address, function, filter):
     if filter != "":
         nsock.addFilter(filter_str=filter)
 
+def heidpi_worker_profiled(address, function, filter, profile_prefix):
+    # Eindeutigen Dateinamen erstellen
+    profile_filename = f"{profile_prefix}_{uuid.uuid4().hex}.prof"
+    profiler = cProfile.Profile()
+    profiler.enable()
+    try:
+        heidpi_worker(address, function, filter)
+    finally:
+        profiler.disable()
+        profiler.dump_stats(profile_filename)
+        with open(profile_filename + ".txt", "w") as f:
+            import pstats
+            ps = pstats.Stats(profiler, stream=f).sort_stats("cumulative")
+            ps.print_stats()
+
 
 def heidpi_process_packet_events(json_dict, instance, current_flow, global_user_data):
     if SHOW_PACKET_EVENTS and ("packet_event_id" in json_dict):
-            if json_dict["packet_event_name"] in PACKET_CONFIG["packet_event_name"]:
-                POOL_PACKET.submit(heidpi_log_event, PACKET_CONFIG, json_dict, None)
+        if json_dict["packet_event_name"] in PACKET_CONFIG["packet_event_name"]:
+            POOL_PACKET.submit(heidpi_log_event, PACKET_CONFIG, json_dict, None)
     return True
 
 def heidpi_process_flow_events(json_dict, instance, current_flow, global_user_data):
@@ -152,8 +171,8 @@ def heidpi_process_flow_events(json_dict, instance, current_flow, global_user_da
 
 def heidpi_process_daemon_events(json_dict, instance, current_flow, global_user_data):
     if SHOW_DAEMON_EVENTS and ("daemon_event_id" in json_dict):
-            if json_dict["daemon_event_name"] in DAEMON_CONFIG["daemon_event_name"]:
-                POOL_DAEMON.submit(heidpi_log_event, DAEMON_CONFIG, json_dict, None)
+        if json_dict["daemon_event_name"] in DAEMON_CONFIG["daemon_event_name"]:
+            POOL_DAEMON.submit(heidpi_log_event, DAEMON_CONFIG, json_dict, None)
     return True
 
 def heidpi_process_error_events(json_dict, instance, current_flow, global_user_data):
@@ -215,7 +234,7 @@ def main():
     parser.add_argument('--write', type=dir_path, action=heiDPI_env.env_default('WRITE'), default='/var/log', help='heiDPI write path for logs')
 
     parser.add_argument('--config', type=file_path, action=heiDPI_env.env_default('CONFIG'), default=f'{os.getcwd()}/config.yml', help='heiDPI write path for logs')
-    
+
     parser.add_argument('--filter', type=str, action=heiDPI_env.env_default('FILTER'), required=False, default="", help="nDPId filter string, e.g. --filter 'ndpi' in json_dict and 'proto' in json_dict['ndpi']")
 
     parser.add_argument('--show-daemon-events', type=int, action=heiDPI_env.env_default('SHOW_DAEMON_EVENTS'), default=0, required=False, help='heiDPI shows daemon events')
@@ -260,24 +279,24 @@ def main():
 
     if SHOW_FLOW_EVENTS:
         global POOL_FLOW
-        
+
         POOL_FLOW = ThreadPoolExecutor(max_workers=PACKET_CONFIG['threads'])
-        
-        heidpi_daemon_job = multiprocessing.Process(
-                target=heidpi_worker,
-                args=(address, heidpi_process_flow_events, args.filter))
-        heidpi_daemon_job.start()
+
+        heidpi_flow_job = multiprocessing.Process(
+            target=heidpi_worker_profiled,
+            args=(address, heidpi_process_flow_events, args.filter, "flow"))
+        heidpi_flow_job.start()
 
 
     #######################################################################################
     if SHOW_PACKET_EVENTS:
         global POOL_PACKET
-        
+
         POOL_PACKET = ThreadPoolExecutor(max_workers=PACKET_CONFIG['threads'])
-        
+
         heidpi_packet_job = multiprocessing.Process(
-                target=heidpi_worker,
-                args=(address, heidpi_process_packet_events, args.filter))
+            target=heidpi_worker_profiled,
+            args=(address, heidpi_process_packet_events, args.filter))
         heidpi_packet_job.start()
 
     #######################################################################################
@@ -287,20 +306,20 @@ def main():
         POOL_DAEMON = ThreadPoolExecutor(max_workers=DAEMON_CONFIG['threads'])
 
         heidpi_daemon_job = multiprocessing.Process(
-                target=heidpi_worker,
-                args=(address, heidpi_process_daemon_events, args.filter))
+            target=heidpi_worker_profiled,
+            args=(address, heidpi_process_daemon_events, args.filter))
         heidpi_daemon_job.start()
 
 
     #######################################################################################
     if SHOW_ERROR_EVENTS:
         global POOL_ERROR
-        
+
         POOL_ERROR = ThreadPoolExecutor(max_workers=ERROR_CONFIG['threads'])
 
         heidpi_error_job = multiprocessing.Process(
-                target=heidpi_worker,
-                args=(address, heidpi_process_error_events, args.filter))
+            target=heidpi_worker_profiled,
+            args=(address, heidpi_process_error_events, args.filter))
         heidpi_error_job.start()
 
 if __name__ == '__main__':
