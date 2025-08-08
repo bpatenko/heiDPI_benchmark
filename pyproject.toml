@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "heiDPI-profiler"
-version = "1.3.0-prof"
+version = "1.3.0.dev"
 authors = [
     { name="Dein Name", email="deine.email@example.com" },
 ]
