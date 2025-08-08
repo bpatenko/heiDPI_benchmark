@@ -57,18 +57,34 @@ int main(int argc, char* argv[]) {
 
     // 3. Launch heiDPI_logger after socket exists
     pid_t loggerPid = -1;
-    if (config.loggerType == "binary") {
-        loggerPid = launchBinaryLogger(
-            config.loggerBinary,
-            config.generatorParams.host,
-            config.generatorParams.port,
-            config.loggerConfigPath);
+    if (config.straceEnabled) {
+        if (config.loggerType == "binary") {
+            loggerPid = launchBinaryLoggerStrace(
+                config.loggerBinary,
+                config.generatorParams.host,
+                config.generatorParams.port,
+                config.loggerConfigPath);
+        } else {
+            loggerPid = launchPythonLoggerStrace(
+                config.loggerModule,
+                config.generatorParams.host,
+                config.generatorParams.port,
+                config.loggerConfigPath);
+        }
     } else {
-        loggerPid = launchPythonLogger(
-            config.loggerModule,
-            config.generatorParams.host,
-            config.generatorParams.port,
-            config.loggerConfigPath);
+        if (config.loggerType == "binary") {
+            loggerPid = launchBinaryLogger(
+                config.loggerBinary,
+                config.generatorParams.host,
+                config.generatorParams.port,
+                config.loggerConfigPath);
+        } else {
+            loggerPid = launchPythonLogger(
+                config.loggerModule,
+                config.generatorParams.host,
+                config.generatorParams.port,
+                config.loggerConfigPath);
+        }
     }
     loggerStarted = true;
     std::cout << "Started heiDPI_logger (PID: " << loggerPid << ")" << std::endl;

@@ -17,6 +17,7 @@ struct Config {
     std::string loggerConfigPath;
     std::string outputFilePath;
     std::string scenarioPath;
+    bool        straceEnabled;   // run logger via strace
     GeneratorParams generatorParams;
 };
 

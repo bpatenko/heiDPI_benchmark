@@ -13,4 +13,14 @@ pid_t launchBinaryLogger(const std::string& path,
                          int port,
                          const std::string& configPath);
 
+pid_t launchPythonLoggerStrace(const std::string& moduleName,
+                               const std::string& host,
+                               int port,
+                               const std::string& configPath);
+
+pid_t launchBinaryLoggerStrace(const std::string& path,
+                               const std::string& host,
+                               int port,
+                               const std::string& configPath);
+
 #endif // LOGGER_LAUNCHER_H
