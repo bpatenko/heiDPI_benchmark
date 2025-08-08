@@ -38,3 +38,6 @@ heiDPI_logger_profiler = "heidpi_logger_profiler.heiDPI_logger:main"
 [project.urls]
 "Homepage" = "https://github.com/deinBenutzername/heiDPI_profiler"
 "Bug Tracker" = "https://github.com/deinBenutzername/heiDPI_profiler/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["heiDPI-profiler"]
