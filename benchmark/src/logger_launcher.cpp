@@ -1,6 +1,7 @@
 #include "logger_launcher.h"
 #include <unistd.h>
 #include <iostream>
+#include <filesystem>
 
 pid_t launchPythonLogger(const std::string& moduleName,
                          const std::string& host,
