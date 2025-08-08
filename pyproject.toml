@@ -32,11 +32,7 @@ classifiers = [
 ]
 
 [project.scripts]
-heiDPI-profiler = "heiDPI-profiler.heiDPI_logger:main"
-
-[project.urls]
-"Homepage" = "https://github.com/deinBenutzername/heiDPI_profiler"
-"Bug Tracker" = "https://github.com/deinBenutzername/heiDPI_profiler/issues"
+heiDPI-profiler = "schema.heiDPI_logger:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["heiDPI-profiler"]
