@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "heiDPI-profiler"
+version = "1.3.0-prof"
+authors = [
+    { name="Dein Name", email="deine.email@example.com" },
+]
+description = "Profiler-enabled heiDPI_logger with cProfile for benchmarking"
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.6"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: European Union Public Licence 1.2 (EUPL 1.2)",
+    "Operating System :: OS Independent",
+    'Intended Audience :: Telecommunications Industry',
+    'Intended Audience :: Information Technology',
+    'Intended Audience :: System Administrators',
+    'Intended Audience :: Science/Research',
+    'Intended Audience :: Developers',
+    'Programming Language :: Python :: 3 :: Only',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Topic :: Security',
+    'Topic :: Internet :: Log Analysis',
+    'Topic :: System :: Networking :: Monitoring',
+]
+
+[project.scripts]
+heiDPI_logger_profiler = "heidpi_logger_profiler.heiDPI_logger:main"
+
+[project.urls]
+"Homepage" = "https://github.com/deinBenutzername/heiDPI_profiler"
+"Bug Tracker" = "https://github.com/deinBenutzername/heiDPI_profiler/issues"
