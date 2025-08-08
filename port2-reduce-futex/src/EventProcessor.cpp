@@ -1,12 +1,24 @@
 #include "EventProcessor.hpp"
-#include <fstream>
 #include <chrono>
 #include <iomanip>
 #include <ctime>
 #include <filesystem>
 
 EventProcessor::EventProcessor(const EventConfig &cfg, const std::string &outDir)
-    : config(cfg), directory(outDir) {}
+    : config(cfg), directory(outDir) {
+    std::filesystem::create_directories(directory);
+    auto path = std::filesystem::path(directory) / (config.filename + ".json");
+    ofs.open(path, std::ios::app);
+    if (!ofs.is_open()) {
+        Logger::error("Failed to open output file: " + path.string());
+    }
+}
+
+EventProcessor::~EventProcessor() {
+    if (ofs.is_open()) {
+        ofs.close();
+    }
+}
 
 static std::string nowTs() {
     auto now = std::chrono::system_clock::now();
@@ -32,11 +44,7 @@ void EventProcessor::process(const nlohmann::json &j) {
             out["ndpi"]["flow_risk"].erase(risk);
         }
     }
-    std::filesystem::create_directories(directory);
-    auto path = std::filesystem::path(directory) / (config.filename + ".json");
-    std::ofstream ofs(path, std::ios::app);
     if (!ofs.is_open()) {
-        Logger::error("Failed to open output file: " + path.string());
         return;
     }
     ofs << out.dump() << std::endl;
