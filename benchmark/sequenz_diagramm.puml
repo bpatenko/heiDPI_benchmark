@@ -1,89 +1,51 @@
 @startuml
-title Ablauf des Benchmark-Frameworks (heiDPI_logger-Benchmark)
+title Ablauf des Benchmark-Frameworks (vereinfacht)
 
 actor User
-participant Runner as "BenchmarkRunner (main.cpp)"
-participant GeneratorThread as "Generator"
-participant LoggerProcess as "heiDPI_logger"
-participant WatcherThread as "Watcher"
-participant AnalyzerThread as "Analyzer"
-participant SwitcherThread as "Scenario-Switcher"
-participant Status as "Status/Console"
-participant Queue as "SampleQueue"
-participant "flow_event.json / *.watch" as File
+participant Runner as "BenchmarkRunner"
+participant Generator as "Generator"
+participant Logger as "heiDPI_logger"
+participant Watcher as "Watcher"
+participant Analyzer as "Analyzer"
+participant Switcher as "Scenario-Switcher"
 
-
-== Startphase ==
+== Start ==
 User -> Runner: Programmstart
-activate Runner
 Runner -> Runner: config.json & scenarios.json laden
-Runner -> GeneratorThread: startThread(startGenerator,\n running, ready, startSending)
-activate GeneratorThread
-GeneratorThread -> Runner: ready = true
-Runner -> LoggerProcess: logger starten (execl/fork)
-activate LoggerProcess
-Runner -> GeneratorThread: startSending = true
-Runner -> WatcherThread: startThread(startWatcher,...)
-activate WatcherThread
-Runner -> AnalyzerThread: startThread(startAnalyzer,...)
-activate AnalyzerThread
-Runner -> SwitcherThread: startThread(startSwitcher,...)
-activate SwitcherThread
+Runner -> Generator: start
+Generator -> Runner: ready
+Runner -> Logger: logger starten
+Runner -> Watcher: start
+Runner -> Analyzer: start
+Runner -> Switcher: start
 Runner -> Runner: waitForStop()
 
-== Nebenläufige Verarbeitung ==
+== Parallelbetrieb ==
 par Generator
-  loop solange running = true
-    GeneratorThread -> LoggerProcess: send(flow_event_json)  # TCP
-    GeneratorThread -> Status: updateRate()/printStatus()
+  loop running
+    Generator -> Logger: send(flow_event_json)
   end
 else Watcher
-  loop solange running = true
-    WatcherThread -> WatcherThread: inotify/select auf Dateiänderungen
-    alt neue Zeilen vorhanden
-      WatcherThread -> File: schreibe *.watch (JSON)
-      WatcherThread -> Queue: enqueue(Sample{packet_id,gen_ts,watcher_ts})
-    end
+  loop running
+    Watcher -> Analyzer: enqueue(sample)
   end
 else Analyzer
-  loop solange running = true
-    AnalyzerThread -> Queue: try_dequeue()
-    alt Sample vorhanden
-      AnalyzerThread -> AnalyzerThread: latency = watcher_ts - generator_ts
-      AnalyzerThread -> Status: updateLatency()
-    end
-    AnalyzerThread -> Status: printStatus() (periodisch)
+  loop running
+    Analyzer -> Analyzer: latency berechnen
   end
 else Switcher
-  loop solange running = true
-    alt Automatikmodus
-      SwitcherThread -> Runner: warte interval_seconds
-      SwitcherThread -> GeneratorThread: gScenario updaten
-    else Manueller Modus
-      SwitcherThread -> User: Szenario-Index abfragen
-      User -> SwitcherThread: Index oder 'q'
-      alt 'q'
-        SwitcherThread -> Runner: running = false
-      else gültiger Index
-        SwitcherThread -> GeneratorThread: gScenario setzen
-      end
-    end
+  loop running
+    Switcher -> Generator: Szenario aktualisieren
   end
 end
 
 == Abbruch ==
 User -> Runner: SIGINT / SIGTERM
-Runner -> Runner: running = false
-Runner -> GeneratorThread: join()
-deactivate GeneratorThread
-Runner -> WatcherThread: join()
-deactivate WatcherThread
-Runner -> AnalyzerThread: join()
-deactivate AnalyzerThread
-Runner -> SwitcherThread: join()
-deactivate SwitcherThread
-Runner -> LoggerProcess: kill(SIGTERM)
-deactivate LoggerProcess
+Runner -> Generator: join()
+Runner -> Watcher: join()
+Runner -> Analyzer: join()
+Runner -> Switcher: join()
+Runner -> Logger: kill(SIGTERM)
 Runner --> User: Benchmark terminated.
-deactivate Runner
 @enduml
+
