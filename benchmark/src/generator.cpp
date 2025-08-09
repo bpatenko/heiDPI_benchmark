@@ -84,10 +84,8 @@ void startGenerator(const GeneratorParams& params,
 
 
     auto nextSend = std::chrono::steady_clock::now();
-    auto lastPrint = nextSend;
-    auto nextPrint = nextSend + std::chrono::milliseconds(500);
-    uint64_t lastPacket = 0;
-    status::updateRate(0.0);
+    auto nextPrint = nextSend + std::chrono::seconds(1);
+    status::updateRate(0, nextSend);
     uint64_t packet_id = 0;
     uint64_t flow_id = 1;
 
@@ -98,7 +96,6 @@ void startGenerator(const GeneratorParams& params,
               << " active" << std::endl;
 
     status::printStatus();
-    lastPrint = std::chrono::steady_clock::now();
 
     while (running.load()) {
         auto now = std::chrono::steady_clock::now();
@@ -156,26 +153,17 @@ void startGenerator(const GeneratorParams& params,
         }
 
             auto interval = nextInterval(*currentScenario);
-            status::updateRate(1'000'000.0 / interval.count());
             nextSend += interval;
         } else {
             auto us = nextInterval(*currentScenario);
-            status::updateRate(1'000'000.0 / us.count());
             std::this_thread::sleep_for(us);
         }
 
         now = std::chrono::steady_clock::now();
         if (now >= nextPrint) {
-            double elapsed =
-                std::chrono::duration_cast<std::chrono::microseconds>(now - lastPrint)
-                    .count() /
-                1e6;
-            double rate = elapsed > 0 ? (packet_id - lastPacket) / elapsed : 0.0;
-            status::updateRate(rate);
+            status::updateRate(packet_id, now);
             status::printStatus();
-            lastPrint = now;
-            lastPacket = packet_id;
-            nextPrint += std::chrono::milliseconds(500);
+            nextPrint += std::chrono::seconds(1);
         }
     }
 

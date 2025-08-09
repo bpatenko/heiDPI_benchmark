@@ -7,10 +7,7 @@
 
 void startAnalyzer(SampleQueue& queue, std::atomic<bool>& running) {
     uint64_t currentLatency = 0;
-    auto nextPrint = std::chrono::steady_clock::now() +
-                     std::chrono::milliseconds(500);
     status::updateLatency(currentLatency);
-    status::printStatus();
 
     while (running.load()) {
         bool processed = false;
@@ -23,13 +20,6 @@ void startAnalyzer(SampleQueue& queue, std::atomic<bool>& running) {
             currentLatency = latency;
             status::updateLatency(currentLatency);
             processed = true;
-        }
-
-        auto now = std::chrono::steady_clock::now();
-        if (now >= nextPrint) {
-            status::updateLatency(currentLatency);
-            status::printStatus();
-            nextPrint += std::chrono::milliseconds(500);
         }
 
         if (!processed) {
@@ -48,5 +38,4 @@ void startAnalyzer(SampleQueue& queue, std::atomic<bool>& running) {
         status::updateLatency(currentLatency);
     }
     status::updateLatency(currentLatency);
-    status::printStatus();
 }
