@@ -1,7 +1,6 @@
 #include "status.h"
 #include "scenario.h"
 #include <chrono>
-#include <deque>
 #include <iostream>
 #include <mutex>
 #include <sys/ioctl.h>
@@ -13,30 +12,29 @@ static std::atomic<double> gRate{0.0};
 static std::atomic<uint64_t> gLatency{0};
 static std::mutex printMutex;
 static std::mutex rateMutex;
-static std::deque<std::pair<std::chrono::steady_clock::time_point, uint64_t>>
-    rateHistory;
-static constexpr std::chrono::seconds RATE_WINDOW{1};
+static std::chrono::steady_clock::time_point lastTime;
+static uint64_t lastCount = 0;
+static bool hasLast = false;
+static constexpr double ALPHA = 0.2; // EWMA smoothing factor
 
 void updateRate(uint64_t count, std::chrono::steady_clock::time_point now) {
     std::lock_guard<std::mutex> lock(rateMutex);
-    rateHistory.emplace_back(now, count);
-    auto cutoff = now - RATE_WINDOW;
-    while (!rateHistory.empty() && rateHistory.front().first < cutoff) {
-        rateHistory.pop_front();
+    if (!hasLast) {
+        lastTime = now;
+        lastCount = count;
+        hasLast = true;
+        return;
     }
-    if (rateHistory.size() >= 2) {
-        auto first = rateHistory.front();
-        auto last = rateHistory.back();
-        double dt =
-            std::chrono::duration_cast<std::chrono::duration<double>>(last.first -
-                                                                    first.first)
-                .count();
-        uint64_t dp = last.second - first.second;
-        double r = dt > 0 ? static_cast<double>(dp) / dt : 0.0;
-        gRate.store(r, std::memory_order_relaxed);
-    } else {
-        gRate.store(0.0, std::memory_order_relaxed);
-    }
+    double dt =
+        std::chrono::duration_cast<std::chrono::duration<double>>(now - lastTime)
+            .count();
+    uint64_t dp = count - lastCount;
+    double inst = dt > 0 ? static_cast<double>(dp) / dt : 0.0;
+    double current = gRate.load(std::memory_order_relaxed);
+    double smooth = ALPHA * inst + (1.0 - ALPHA) * current;
+    gRate.store(smooth, std::memory_order_relaxed);
+    lastTime = now;
+    lastCount = count;
 }
 
 void updateLatency(uint64_t l) {
