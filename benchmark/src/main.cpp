@@ -121,12 +121,6 @@ void signalHandler(int signum) {
     running = false;
 }
 
-void waitForStop() {
-    while (running.load()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-}
-
 int main(int argc, char* argv[]) {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
@@ -197,16 +191,14 @@ int main(int argc, char* argv[]) {
     std::thread analyzerThread(startAnalyzer,
                                std::ref(sampleQueue),
                                std::ref(running));
-    std::thread switchThread(startSwitcher, scenarioFile, std::ref(running));
 
-    // 5. Wait for Ctrl+C
-    waitForStop();
+    // 5. Run scenario switcher in main thread
+    startSwitcher(scenarioFile, running);
 
     // 6. Cleanup
     genThread.join();
     watchThread.join();
     analyzerThread.join();
-    switchThread.join();
 
     kill(loggerPid, SIGTERM);
     std::cout << "Benchmark terminated." << std::endl;
