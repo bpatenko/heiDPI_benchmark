@@ -15,7 +15,6 @@ set(SRC_FILES
         src/watcher.cpp
         src/analyzer.cpp
         src/logger_launcher.cpp
-        src/switcher.cpp
         src/config.cpp
 )
 add_executable(benchmark ${SRC_FILES})
