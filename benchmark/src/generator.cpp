@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <sys/select.h>
 #include <nlohmann/json.hpp>
 #include <nlohmann/detail/output/output_adapters.hpp>
 #include <nlohmann/detail/output/serializer.hpp>
@@ -17,13 +18,14 @@
 
 using json = nlohmann::json;
 
-namespace {
-int initializeServerSocket(const GeneratorParams& params,
-                           std::atomic<bool>& ready) {
+void startGenerator(const GeneratorParams& params,
+                    std::atomic<bool>& running,
+                    std::atomic<bool>& ready,
+                    std::atomic<bool>& startSending) {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         std::cerr << "Generator: socket() failed" << std::endl;
-        return -1;
+        return;
     }
 
     sockaddr_in serverAddr{};
@@ -34,35 +36,47 @@ int initializeServerSocket(const GeneratorParams& params,
     if (bind(sock, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) < 0) {
         perror("Generator: bind failed");
         close(sock);
-        return -1;
+        return;
     }
     if (listen(sock, 1) < 0) {
         perror("Generator: listen failed");
         close(sock);
-        return -1;
+        return;
     }
 
     // Notify main that socket is ready
     ready = true;
 
-    int client = accept(sock, nullptr, nullptr);
-    if (client < 0) {
-        perror("Generator: accept failed");
-        close(sock);
-        return -1;
+    int client = -1;
+    while (running.load()) {
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(sock, &rfds);
+
+        struct timeval tv {1, 0};
+        int ret = select(sock + 1, &rfds, nullptr, nullptr, &tv);
+        if (ret < 0) {
+            perror("Generator: select failed");
+            close(sock);
+            return;
+        } else if (ret == 0) {
+            continue;
+        }
+
+        if (FD_ISSET(sock, &rfds)) {
+            client = accept(sock, nullptr, nullptr);
+            if (client < 0) {
+                if (running.load()) {
+                    perror("Generator: accept failed");
+                }
+                close(sock);
+                return;
+            }
+            break;
+        }
     }
-
-    close(sock);
-    return client;
-}
-} // namespace
-
-void startGenerator(const GeneratorParams& params,
-                    std::atomic<bool>& running,
-                    std::atomic<bool>& ready,
-                    std::atomic<bool>& startSending) {
-    int client = initializeServerSocket(params, ready);
-    if (client < 0) {
+    if (!running.load()) {
+        close(sock);
         return;
     }
 
@@ -156,7 +170,9 @@ void startGenerator(const GeneratorParams& params,
                     oa, ' ', nlohmann::detail::error_handler_t::strict);
                 writer.dump(j, false, false, 0);
             }
-            std::snprintf(message.data(), 6, "%05zu", message.size() - 5);
+            char prefix[6];
+            std::snprintf(prefix, sizeof(prefix), "%05zu", message.size() - 5);
+            std::memcpy(message.data(), prefix, 5);
 
             if (send(client, message.data(), message.size(), 0) < 0) {
                 std::cerr << "Generator: send() failed, exiting" << std::endl;
@@ -190,4 +206,5 @@ void startGenerator(const GeneratorParams& params,
 
 
     close(client);
+    close(sock);
 }
