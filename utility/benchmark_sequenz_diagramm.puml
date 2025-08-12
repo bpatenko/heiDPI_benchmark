@@ -1,0 +1,86 @@
+@startuml
+title Ablauf des Benchmark-Frameworks (mit Handshake/Blocking)
+
+actor User
+participant Runner as "BenchmarkRunner"
+participant Generator as "Generator"
+participant Logger as "heiDPI_logger"
+participant Watcher as "Watcher"
+participant Analyzer as "Analyzer"
+participant Switcher as "Scenario-Switcher"
+participant Queue as "SampleQueue"
+
+== Start/Handshake ==
+User -> Runner: Programmstart
+Runner -> Runner: config.json & scenarios.json laden
+
+Runner -> Generator: startThread(startGenerator)
+activate Generator
+Generator -> Generator: socket(), bind(), listen()
+Generator --> Runner: ready = true  <<Signal>>
+
+group Runner wartet auf Generator («blocks»)
+  loop bis ready==true
+    Runner -> Runner: warten…
+  end
+end
+
+Runner -> Logger: fork/exec (logger starten)  <<sync>>
+activate Logger
+Runner --> Generator: startSending = true  <<Signal>>
+
+group Generator wartet auf Logger («blocks»)
+  loop bis TCP accept() erfolgreich
+    Generator -> Generator: accept()  <<blocking>>
+  end
+  Logger --> Generator: connect() OK  <<Signal>>
+end
+
+Runner -> Watcher: startThread(startWatcher)
+activate Watcher
+Runner -> Analyzer: startThread(startAnalyzer)
+activate Analyzer
+Runner -> Switcher: startThread(startSwitcher)
+activate Switcher
+Runner -> Runner: waitForStop()
+
+== Parallelbetrieb ==
+par Generator
+  loop running
+    Generator -> Logger: send(flow_event_json)  <<async>>
+  end
+else Watcher
+  loop running
+    Watcher -> Watcher: inotify/select neue Zeilen
+    alt neue Events
+      Watcher -> Queue: enqueue(Sample{packet_id, gen_ts, watcher_ts})
+    end
+  end
+else Analyzer
+  loop running
+    Analyzer -> Queue: try_dequeue()
+    alt Sample vorhanden
+      Analyzer -> Analyzer: latency = watcher_ts - gen_ts
+    end
+  end
+else Switcher
+  loop running
+    Switcher -> Generator: gScenario aktualisieren\n(automatisch oder manuell)
+  end
+end
+
+== Abbruch ==
+User -> Runner: SIGINT / SIGTERM
+Runner -> Runner: running = false
+Runner -> Generator: join()
+deactivate Generator
+Runner -> Watcher: join()
+deactivate Watcher
+Runner -> Analyzer: join()
+deactivate Analyzer
+Runner -> Switcher: join()
+deactivate Switcher
+Runner -> Logger: kill(SIGTERM)
+deactivate Logger
+Runner --> User: Benchmark terminated.
+@enduml
