@@ -5,7 +5,14 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 
-static const ScenarioConfig defaults{};
+// Set default scenario with higher base rate to stress the generator
+static ScenarioConfig makeDefaults() {
+    ScenarioConfig cfg{};
+    cfg.idle_rate = 10'000; // pkts/s
+    return cfg;
+}
+
+static const ScenarioConfig defaults = makeDefaults();
 ScenarioPtr gScenario{std::make_shared<ScenarioConfig>(defaults)};
 
 using us = std::chrono::microseconds;
@@ -84,7 +91,7 @@ ScenarioFile loadScenarioFile(const std::string& path)
                   << ", using defaults\n";
         ScenarioConfig idle;
         idle.mode = Mode::IDLE;
-        idle.idle_rate = 100;
+        idle.idle_rate = 10'000;
 
         ScenarioConfig burst = idle;
         burst.mode = Mode::BURST;
