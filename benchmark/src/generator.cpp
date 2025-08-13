@@ -6,9 +6,6 @@
 #include <iostream>
 #include <thread>
 #include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <sys/select.h>
 #include <nlohmann/json.hpp>
 #include <nlohmann/detail/output/output_adapters.hpp>
 #include <nlohmann/detail/output/serializer.hpp>
@@ -18,74 +15,9 @@
 
 using json = nlohmann::json;
 
-void startGenerator(const GeneratorParams& params,
-                    std::atomic<bool>& running,
-                    std::atomic<bool>& ready,
-                    std::atomic<bool>& startSending) {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        std::cerr << "Generator: socket() failed" << std::endl;
-        return;
-    }
-
-    sockaddr_in serverAddr{};
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(params.port);
-    inet_pton(AF_INET, params.host.c_str(), &serverAddr.sin_addr);
-
-    if (bind(sock, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) < 0) {
-        perror("Generator: bind failed");
-        close(sock);
-        return;
-    }
-    if (listen(sock, 1) < 0) {
-        perror("Generator: listen failed");
-        close(sock);
-        return;
-    }
-
-    // Notify main that socket is ready
-    ready = true;
-
-    int client = -1;
-    while (running.load()) {
-        fd_set rfds;
-        FD_ZERO(&rfds);
-        FD_SET(sock, &rfds);
-
-        struct timeval tv {1, 0};
-        int ret = select(sock + 1, &rfds, nullptr, nullptr, &tv);
-        if (ret < 0) {
-            perror("Generator: select failed");
-            close(sock);
-            return;
-        } else if (ret == 0) {
-            continue;
-        }
-
-        if (FD_ISSET(sock, &rfds)) {
-            client = accept(sock, nullptr, nullptr);
-            if (client < 0) {
-                if (running.load()) {
-                    perror("Generator: accept failed");
-                }
-                close(sock);
-                return;
-            }
-            break;
-        }
-    }
-    if (!running.load()) {
-        close(sock);
-        return;
-    }
-
-    // Wait until the logger is started before sending
-    while (!startSending.load() && running.load()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
+void startGenerator(int client, std::atomic<bool>& running) {
+    // allow the logger some time to initialize
     std::this_thread::sleep_for(std::chrono::seconds(1));
-
 
     auto nextSend = std::chrono::steady_clock::now();
     auto lastPrint = nextSend;
@@ -202,9 +134,4 @@ void startGenerator(const GeneratorParams& params,
             nextPrint += std::chrono::milliseconds(500);
         }
     }
-
-
-
-    close(client);
-    close(sock);
 }

@@ -7,6 +7,8 @@
 #include <vector>
 #include <sys/select.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
 #include "config.h"
 #include "generator.h"
@@ -17,8 +19,6 @@
 #include "scenario.h"
 
 std::atomic<bool> running(true);
-std::atomic<bool> generatorReady(false);
-std::atomic<bool> loggerStarted(false);
 
 static void printManualMenu(const std::vector<ScenarioPtr>& presets) {
     struct winsize w {};
@@ -130,25 +130,32 @@ int main(int argc, char* argv[]) {
 
     SampleQueue sampleQueue;
 
-    // 1. Start generator thread (server socket)
-    std::thread genThread(startGenerator,
-                          config.generatorParams,
-                          std::ref(running),
-                          std::ref(generatorReady),
-                          std::ref(loggerStarted));
-
-    // 2. Wait until generator has bound its socket
-    while (!generatorReady.load() && running.load()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    }
-    if (!running.load()) {
-        genThread.join();
-        return 0;
+    // Set up server socket for the generator
+    int serverSock = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSock < 0) {
+        std::cerr << "Generatorsocket failed" << std::endl;
+        return 1;
     }
 
-    std::cout << "Generator is ready. Starting heiDPI_logger..." << std::endl;
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(config.generatorParams.port);
+    inet_pton(AF_INET, config.generatorParams.host.c_str(), &serverAddr.sin_addr);
 
-    // 3. Launch heiDPI_logger after socket exists
+    if (bind(serverSock, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) < 0) {
+        perror("Generatorsocket bind failed");
+        close(serverSock);
+        return 1;
+    }
+    if (listen(serverSock, 1) < 0) {
+        perror("Generatorsocket listen failed");
+        close(serverSock);
+        return 1;
+    }
+
+    std::cout << "Generatorsocket is ready. Starting heiDPI_logger..." << std::endl;
+
+    // Launch heiDPI_logger
     pid_t loggerPid = -1;
     if (config.straceEnabled) {
         if (config.loggerType == "binary") {
@@ -179,10 +186,20 @@ int main(int argc, char* argv[]) {
                 config.loggerConfigPath);
         }
     }
-    loggerStarted = true;
     std::cout << "Started heiDPI_logger (PID: " << loggerPid << ")" << std::endl;
 
-    // 4. Start watcher and analyzer threads
+    int clientSock = accept(serverSock, nullptr, nullptr);
+    if (clientSock < 0) {
+        perror("Generator: accept failed");
+        close(serverSock);
+        kill(loggerPid, SIGTERM);
+        return 1;
+    }
+
+    // Start generator thread now that a client is connected
+    std::thread genThread(startGenerator, clientSock, std::ref(running));
+
+    // Start watcher and analyzer threads
     std::thread watchThread(startWatcher,
                             config.outputFilePath,
                             std::ref(sampleQueue),
@@ -192,13 +209,15 @@ int main(int argc, char* argv[]) {
                                std::ref(sampleQueue),
                                std::ref(running));
 
-    // 5. Run scenario switcher in main thread
+    // Run scenario switcher in main thread
     startSwitcher(scenarioFile, running);
 
-    // 6. Cleanup
+    // Cleanup
     genThread.join();
     watchThread.join();
     analyzerThread.join();
+    close(clientSock);
+    close(serverSock);
 
     kill(loggerPid, SIGTERM);
     std::cout << "Benchmark terminated." << std::endl;
