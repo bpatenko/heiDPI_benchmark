@@ -24,6 +24,12 @@ Config loadConfig(const std::string& path) {
         cfg.straceEnabled    = false;
         cfg.generatorParams  = {"127.0.0.1", 7000, 1.0, 128};
         cfg.eventProbabilities = {0.25, 0.25, 0.25, 0.25};
+        cfg.loggerEventParams = {
+            {"--show-flow-events", "1"},
+            {"--show-daemon-events", "1"},
+            {"--show-packet-events", "1"},
+            {"--show-error-events", "1"}
+        };
         return cfg;
     }
 
@@ -52,6 +58,11 @@ Config loadConfig(const std::string& path) {
     cfg.eventProbabilities.daemon = ep.value("daemon", 0.25);
     cfg.eventProbabilities.error  = ep.value("error", 0.25);
     cfg.eventProbabilities.packet = ep.value("packet", 0.25);
+
+    auto params = j.value("eventParams", json::object());
+    for (auto it = params.begin(); it != params.end(); ++it) {
+        cfg.loggerEventParams.emplace_back(it.key(), it.value().get<std::string>());
+    }
 
     return cfg;
 }

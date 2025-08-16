@@ -2,6 +2,8 @@
 #define CONFIG_H
 
 #include <string>
+#include <vector>
+#include <utility>
 
 struct GeneratorParams {
     std::string host;
@@ -27,6 +29,7 @@ struct Config {
     bool                straceEnabled;   // run logger via strace
     GeneratorParams     generatorParams;
     EventProbabilities  eventProbabilities;
+    std::vector<std::pair<std::string, std::string>> loggerEventParams;
 };
 
 Config loadConfig(const std::string& path);
