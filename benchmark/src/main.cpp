@@ -197,7 +197,10 @@ int main(int argc, char* argv[]) {
     }
 
     // Start generator thread now that a client is connected
-    std::thread genThread(startGenerator, clientSock, std::ref(running));
+    std::thread genThread(startGenerator,
+                          clientSock,
+                          std::ref(running),
+                          config.eventProbabilities);
 
     // Start watcher and analyzer threads
     std::thread watchThread(startWatcher,
