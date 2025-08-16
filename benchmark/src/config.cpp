@@ -23,6 +23,7 @@ Config loadConfig(const std::string& path) {
         cfg.scenarioPath     = "scenarios.json";
         cfg.straceEnabled    = false;
         cfg.generatorParams  = {"127.0.0.1", 7000, 1.0, 128};
+        cfg.eventProbabilities = {0.25, 0.25, 0.25, 0.25};
         return cfg;
     }
 
@@ -45,6 +46,12 @@ Config loadConfig(const std::string& path) {
     cfg.generatorParams.port         = gj.value("port", 7000);
     cfg.generatorParams.rate         = gj.value("rate", 1.0);
     cfg.generatorParams.message_size = gj.value("message_size", 128);
+
+    auto ep = j.value("eventProbabilities", json::object());
+    cfg.eventProbabilities.flow   = ep.value("flow", 0.25);
+    cfg.eventProbabilities.daemon = ep.value("daemon", 0.25);
+    cfg.eventProbabilities.error  = ep.value("error", 0.25);
+    cfg.eventProbabilities.packet = ep.value("packet", 0.25);
 
     return cfg;
 }

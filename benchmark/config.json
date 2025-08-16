@@ -12,5 +12,11 @@
     "port": 7000,
     "rate": 2.0,
     "message_size": 128
+  },
+  "eventProbabilities": {
+    "flow": 0.25,
+    "daemon": 0.25,
+    "error": 0.25,
+    "packet": 0.25
   }
 }

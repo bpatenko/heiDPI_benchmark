@@ -10,6 +10,13 @@ struct GeneratorParams {
     size_t message_size;
 };
 
+struct EventProbabilities {
+    double flow{0.25};
+    double daemon{0.25};
+    double error{0.25};
+    double packet{0.25};
+};
+
 struct Config {
     std::string loggerType;      // "python" or "binary"
     std::string loggerModule;
@@ -17,8 +24,9 @@ struct Config {
     std::string loggerConfigPath;
     std::string outputFilePath;
     std::string scenarioPath;
-    bool        straceEnabled;   // run logger via strace
-    GeneratorParams generatorParams;
+    bool                straceEnabled;   // run logger via strace
+    GeneratorParams     generatorParams;
+    EventProbabilities  eventProbabilities;
 };
 
 Config loadConfig(const std::string& path);
