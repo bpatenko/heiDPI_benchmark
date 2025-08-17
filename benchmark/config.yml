@@ -5,8 +5,8 @@ logging:
   encoding: utf-8
   format: "%(asctime)s %(levelname)s:%(message)s"
   datefmt: "%Y-%m-%dT%I:%M:%S"
-  # filemode: w # a for append, will not override current file
-  # filename: heiDPI.log
+# filemode: w # a for append, will not override current file
+# filename: heiDPI.log
 
 flow_event:
   ignore_fields: []
@@ -23,11 +23,11 @@ flow_event:
     filepath: /tmp/city.mmdb
     keys:
       - country.names.en
-      # Additional configurations
-      - location
-      # - city
-      # - traits
-      # - postal
+#      # Additional configurations
+#      - location
+#      # - city
+#      # - traits
+#      # - postal
   threads: 4
 
 daemon_event:

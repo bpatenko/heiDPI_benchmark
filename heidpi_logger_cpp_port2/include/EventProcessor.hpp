@@ -15,6 +15,6 @@ public:
 private:
     EventConfig config;
     std::string directory;
-    GeoIP geo;
+    std::unique_ptr<GeoIP> geo;
 };
 

@@ -6,7 +6,16 @@
 #include <filesystem>
 
 EventProcessor::EventProcessor(const EventConfig &cfg, const std::string &outDir)
-    : config(cfg), directory(outDir), geo(cfg.geoip_path, cfg.geoip_keys) {}
+    : config(cfg), directory(outDir) {
+    if (cfg.geoip_enabled && !cfg.geoip_path.empty()) {
+        geo = std::make_unique<GeoIP>(cfg.geoip_path, cfg.geoip_keys);
+    } else {
+        // optional, aber hilfreich zur Diagnose:
+        Logger::info(std::string("GeoIP disabled for '") + cfg.filename +
+                     "' (enabled=" + (cfg.geoip_enabled ? "true" : "false") +
+                     ", path=" + (cfg.geoip_path.empty() ? "<empty>" : cfg.geoip_path) + ")");
+    }
+}
 
 static std::string nowTs() {
     auto now = std::chrono::system_clock::now();
@@ -21,10 +30,10 @@ void EventProcessor::process(const nlohmann::json &j) {
     nlohmann::json out = j;
     out["timestamp"] = nowTs();
 
-    if (config.geoip_enabled) {
+    if (geo) { // statt config.geoip_enabled
         std::string src = j.value("src_ip", "");
         std::string dst = j.value("dst_ip", "");
-        geo.enrich(src, dst, out);
+        geo->enrich(src, dst, out);
     }
     for (const auto &field : config.ignore_fields) {
         out.erase(field);
