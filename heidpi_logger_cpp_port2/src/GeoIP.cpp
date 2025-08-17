@@ -67,7 +67,7 @@ GeoIP::GeoIP(const std::string &path, const std::vector<std::string> &k)
     : keys(k) {
     int status = MMDB_open(path.c_str(), MMDB_MODE_MMAP, &mmdb);
     if (status != MMDB_SUCCESS) {
-        Logger::error("GeoIP open failed: " + std::string(MMDB_strerror(status)));
+        Logger::error("GeoIP open failed: " + path.c_str() + std::string(MMDB_strerror(status)));
         loaded = false;
     } else {
         loaded = true;
