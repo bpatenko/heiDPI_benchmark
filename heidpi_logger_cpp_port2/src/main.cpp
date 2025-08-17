@@ -1,11 +1,3 @@
-// main_dispatch.cpp - alternate entry point for heiDPI_logger C++ port2
-//
-// This version uses a single NDPIClient to receive all events from
-// nDPIsrvd and dispatches each event to the appropriate EventProcessor
-// based on its event type.  It avoids spawning separate reader threads
-// for each event type, so each event is processed exactly once and
-// ignored events are only logged once for their intended handler.
-
 #include "Config.hpp"
 #include "Logger.hpp"
 #include "NDPIClient.hpp"
@@ -172,25 +164,13 @@ int main(int argc, char **argv) {
             return;
         }
 
-        // Dispatch event to matching worker(s)
+        // Dispatch event to matching worker(s).  All events are allowed for their type,
+        // so we no longer check config.event_names.  If there is a worker for the
+        // event type, process it; otherwise log a single info.
         bool handled = false;
         for (auto &w : workers) {
             if (w.eventKey != key) continue;  // ignore unmatched types
-            // check allowed names; if empty, allow all
-            if (w.config.event_names.empty() ||
-                std::find(w.config.event_names.begin(), w.config.event_names.end(), name) != w.config.event_names.end()) {
-                w.processor.process(j);
-            } else {
-                // build allowed names string
-                std::ostringstream ss;
-                ss << "[";
-                for (size_t i = 0; i < w.config.event_names.size(); ++i) {
-                    ss << w.config.event_names[i];
-                    if (i + 1 < w.config.event_names.size()) ss << ", ";
-                }
-                ss << "]";
-                Logger::info("Ignoring event '" + name + "' not in allowed list " + ss.str());
-            }
+            w.processor.process(j);
             handled = true;
         }
         if (!handled) {
