@@ -6,7 +6,7 @@
 #include <filesystem>
 
 EventProcessor::EventProcessor(const EventConfig &cfg, const std::string &outDir)
-    : config(cfg), directory(outDir) {}
+    : config(cfg), directory(outDir), geo(cfg.geoip_path, cfg.geoip_keys) {}
 
 static std::string nowTs() {
     auto now = std::chrono::system_clock::now();
@@ -22,7 +22,9 @@ void EventProcessor::process(const nlohmann::json &j) {
     out["timestamp"] = nowTs();
 
     if (config.geoip_enabled) {
-        geo.enrich(j, out);
+        std::string src = j.value("src_ip", "");
+        std::string dst = j.value("dst_ip", "");
+        geo.enrich(src, dst, out);
     }
     for (const auto &field : config.ignore_fields) {
         out.erase(field);
