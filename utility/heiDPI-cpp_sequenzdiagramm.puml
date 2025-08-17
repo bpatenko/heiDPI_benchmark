@@ -1,0 +1,48 @@
+@startuml
+actor User
+participant Main
+participant Config
+participant Logger
+participant NDPIClient
+participant EventProcessor
+participant GeoIP
+participant "nDPIsrvd (server)" as Server
+entity "Output file" as File
+
+User -> Main: start program
+Main -> Config: Config(path)
+note right
+loads YAML, builds LoggingConfig and EventConfig
+(flow, packet, daemon, error)
+end note
+Main <- Config: logging & event config
+Main -> Logger: init(loggingCfg)
+
+loop for each enabled event type
+  Main -> NDPIClient: create client
+  alt connect via UNIX path
+    Main -> NDPIClient: connectUnix(unixPath)
+  else connect via TCP
+    Main -> NDPIClient: connectTcp(host, port)
+  end
+  Main -> EventProcessor: create(EventConfig, writePath)
+  Main -> NDPIClient: loop(callback, filter)
+  group receive events
+    NDPIClient -> NDPIClient: send optional filter
+    NDPIClient -> Server: request events
+    note over NDPIClient
+    reads 5-digit length then JSON payload
+    end note
+    Server --> NDPIClient: JSON event
+    NDPIClient -> EventProcessor: callback(eventJSON)
+    alt event name allowed
+      EventProcessor -> GeoIP: enrich if geoip_enabled
+      EventProcessor -> EventProcessor: remove ignore_fields & ignore_risks
+      EventProcessor -> File: write event with timestamp
+      note right: if open fails, Logger.error(...)
+    else event ignored
+      EventProcessor -> Logger: info("Ignoring event …")
+    end
+  end
+end
+@enduml

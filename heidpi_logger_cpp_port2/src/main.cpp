@@ -1,16 +1,26 @@
+// main_dispatch.cpp - alternate entry point for heiDPI_logger C++ port2
+//
+// This version uses a single NDPIClient to receive all events from
+// nDPIsrvd and dispatches each event to the appropriate EventProcessor
+// based on its event type.  It avoids spawning separate reader threads
+// for each event type, so each event is processed exactly once and
+// ignored events are only logged once for their intended handler.
+
 #include "Config.hpp"
 #include "Logger.hpp"
 #include "NDPIClient.hpp"
 #include "EventProcessor.hpp"
+
 #include <algorithm>
 #include <cstdlib>
-#include <iostream>
 #include <filesystem>
 #include <iostream>
 #include <sstream>
+#include <string>
 #include <thread>
 #include <vector>
 
+// Same CLI options structure as original
 struct CLIOptions {
     std::string host{"127.0.0.1"};
     std::string unix_path{};
@@ -24,11 +34,13 @@ struct CLIOptions {
     bool show_flow{false};
 };
 
+// Helper to read environment variables or fall back to a default
 static std::string envOrDefault(const char *env, const std::string &def) {
     const char *v = std::getenv(env);
     return v ? std::string(v) : def;
 }
 
+// Parse command line and environment into CLIOptions
 CLIOptions parse(int argc, char **argv) {
     CLIOptions o;
     o.host = envOrDefault("HOST", o.host);
@@ -73,86 +85,119 @@ CLIOptions parse(int argc, char **argv) {
     return o;
 }
 
-static void usage(const char *prog) {
-    std::string name = std::filesystem::path(prog).filename();
-    std::cout << "usage: " << name
-              << " [-h] [--host HOST | --unix UNIX] [--port PORT] [--write WRITE]\n"
-                 "            [--config CONFIG] [--filter FILTER]\n"
-                 "            [--show-daemon-events SHOW_DAEMON_EVENTS]\n"
-                 "            [--show-packet-events SHOW_PACKET_EVENTS]\n"
-                 "            [--show-error-events SHOW_ERROR_EVENTS]\n"
-                 "            [--show-flow-events SHOW_FLOW_EVENTS]\n\n"
-                 "heiDPI Python Interface\n\n"
-                 "options:\n"
-                 "  -h, --help            show this help message and exit\n"
-                 "  --host HOST           nDPIsrvd host IP\n"
-                 "  --unix UNIX           nDPIsrvd unix socket path\n"
-                 "  --port PORT           nDPIsrvd TCP port (default: 7000)\n"
-                 "  --write WRITE         heiDPI write path for logs (default: /var/log)\n"
-                 "  --config CONFIG       heiDPI write path for logs (default: config.yml)\n"
-                 "  --filter FILTER       nDPId filter string, e.g. --filter 'ndpi' in json_dict and 'proto' in json_dict['ndpi'] (default: )\n"
-                 "  --show-daemon-events SHOW_DAEMON_EVENTS\n"
-                 "                        heiDPI shows daemon events (default: 0)\n"
-                 "  --show-packet-events SHOW_PACKET_EVENTS\n"
-                 "                        heiDPI shows packet events (default: 0)\n"
-                 "  --show-error-events SHOW_ERROR_EVENTS\n"
-                 "                        heiDPI shows error events (default: 0)\n"
-                 "  --show-flow-events SHOW_FLOW_EVENTS\n"
-                 "                        heiDPI shows flow events (default: 0)\n";
-}
+// Struct to bundle an event handler with its configuration
+struct Worker {
+    std::string eventKey;      // key in JSON indicating this event type
+    EventConfig config;        // copy of configuration for this type
+    EventProcessor processor;  // processor instance
+    Worker(const std::string &k, const EventConfig &c, const std::string &dir)
+        : eventKey(k), config(c), processor(c, dir) {}
+};
 
 int main(int argc, char **argv) {
+    // quick help check
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "-h" || a == "--help") {
-            usage(argv[0]);
+            std::string name = std::filesystem::path(argv[0]).filename();
+            std::cout << "usage: " << name
+                      << " [-h] [--host HOST | --unix UNIX] [--port PORT] [--write WRITE]\n"
+                         "            [--config CONFIG] [--filter FILTER]\n"
+                         "            [--show-daemon-events]\n"
+                         "            [--show-packet-events]\n"
+                         "            [--show-error-events]\n"
+                         "            [--show-flow-events]\n";
             return 0;
         }
     }
+    // parse options
     CLIOptions opts = parse(argc, argv);
+    // load configuration
     Config cfg(opts.config_path);
+    // initialize logger
     Logger::init(cfg.logging());
 
-    std::vector<std::thread> threads;
-    auto start = [&](bool enable, const EventConfig &ec) {
-        if (!enable) return;
-        threads.emplace_back([&, ec] {
-            NDPIClient client;
-            if (!opts.unix_path.empty())
-                client.connectUnix(opts.unix_path);
-            else
-                client.connectTcp(opts.host, static_cast<unsigned short>(opts.port));
-            EventProcessor proc(ec, opts.write_path);
-            client.loop([&](const nlohmann::json &j) {
-                // check allowed event names
-                std::string name;
-                if (j.contains("flow_event_name")) name = j["flow_event_name"].get<std::string>();
-                if (j.contains("packet_event_name")) name = j["packet_event_name"].get<std::string>();
-                if (j.contains("daemon_event_name")) name = j["daemon_event_name"].get<std::string>();
-                if (j.contains("error_event_name")) name = j["error_event_name"].get<std::string>();
-                if (ec.event_names.empty() ||
-                    std::find(ec.event_names.begin(), ec.event_names.end(), name) != ec.event_names.end()) {
-                    proc.process(j);
-                } else {
-                    std::ostringstream ss;
-                    ss << "[";
-                    for (size_t i = 0; i < ec.event_names.size(); ++i) {
-                        ss << ec.event_names[i];
-                        if (i + 1 < ec.event_names.size()) ss << ", ";
-                    }
-                    ss << "]";
-                    Logger::info("Ignoring event '" + name + "' not in allowed list " + ss.str());
+    // Build a list of workers (event type + processor) according to CLI flags
+    std::vector<Worker> workers;
+    workers.reserve(4);
+    if (opts.show_flow) {
+        workers.emplace_back("flow_event_name", cfg.flowEvent(), opts.write_path);
+    }
+    if (opts.show_packet) {
+        workers.emplace_back("packet_event_name", cfg.packetEvent(), opts.write_path);
+    }
+    if (opts.show_daemon) {
+        workers.emplace_back("daemon_event_name", cfg.daemonEvent(), opts.write_path);
+    }
+    if (opts.show_error) {
+        workers.emplace_back("error_event_name", cfg.errorEvent(), opts.write_path);
+    }
+    if (workers.empty()) {
+        Logger::error("No event types enabled. Use --show-*_events flags to enable processing.");
+        return 1;
+    }
+
+    // Start single client connection
+    NDPIClient client;
+    try {
+        if (!opts.unix_path.empty())
+            client.connectUnix(opts.unix_path);
+        else
+            client.connectTcp(opts.host, static_cast<unsigned short>(opts.port));
+    } catch (const std::exception &ex) {
+        Logger::error(std::string("Failed to connect: ") + ex.what());
+        return 1;
+    }
+
+    // Process events in the same thread (could be moved to its own thread if needed)
+    client.loop([&](const nlohmann::json &j) {
+        // Determine the event key and name; default to empty
+        std::string key;
+        std::string name;
+        if (j.contains("flow_event_name")) {
+            key = "flow_event_name";
+            name = j["flow_event_name"].get<std::string>();
+        } else if (j.contains("packet_event_name")) {
+            key = "packet_event_name";
+            name = j["packet_event_name"].get<std::string>();
+        } else if (j.contains("daemon_event_name")) {
+            key = "daemon_event_name";
+            name = j["daemon_event_name"].get<std::string>();
+        } else if (j.contains("error_event_name")) {
+            key = "error_event_name";
+            name = j["error_event_name"].get<std::string>();
+        } else {
+            // unknown event type
+            Logger::info("Received unknown event: missing event name");
+            return;
+        }
+
+        // Dispatch event to matching worker(s)
+        bool handled = false;
+        for (auto &w : workers) {
+            if (w.eventKey != key) continue;  // ignore unmatched types
+            // check allowed names; if empty, allow all
+            if (w.config.event_names.empty() ||
+                std::find(w.config.event_names.begin(), w.config.event_names.end(), name) != w.config.event_names.end()) {
+                w.processor.process(j);
+            } else {
+                // build allowed names string
+                std::ostringstream ss;
+                ss << "[";
+                for (size_t i = 0; i < w.config.event_names.size(); ++i) {
+                    ss << w.config.event_names[i];
+                    if (i + 1 < w.config.event_names.size()) ss << ", ";
                 }
-                return; }, opts.filter);
-        });
-    };
+                ss << "]";
+                Logger::info("Ignoring event '" + name + "' not in allowed list " + ss.str());
+            }
+            handled = true;
+        }
+        if (!handled) {
+            // No worker configured for this event type
+            Logger::info("No handler enabled for event '" + name + "' of type " + key);
+        }
+    }, opts.filter);
 
-    start(opts.show_flow, cfg.flowEvent());
-    start(opts.show_packet, cfg.packetEvent());
-    start(opts.show_daemon, cfg.daemonEvent());
-    start(opts.show_error, cfg.errorEvent());
-
-    for (auto &t : threads) t.join();
     return 0;
 }
-
