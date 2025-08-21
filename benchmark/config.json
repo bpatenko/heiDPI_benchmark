@@ -1,7 +1,7 @@
 {
   "loggerType": "binary",
   "loggerModule": "heiDPI_logger",
-  "loggerBinary": "heiDPI_logger.bin",
+  "loggerBinary": "../heidpi_logger_cpp_port2/build/heidpi_cpp",
   "loggerConfigPath": "config.yml",
   "outputFilePath": "flow_event.json",
   "scenarioPath": "scenarios.json",
