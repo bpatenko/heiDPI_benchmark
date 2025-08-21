@@ -55,8 +55,8 @@ void startGenerator(int client, std::atomic<bool>& running) {
         {"l4_proto", "tcp"},
         {"midstream", 0},
         {"thread_ts_usec", 0},
-        {"src_ip", "192.168.0.1"},
-        {"dst_ip", "192.168.0.2"}
+        {"src_ip", "8.8.8.8"},  //real address to work properly with GeoIP2
+        {"dst_ip", "4.4.4.4"}   //real address to work properly with GeoIP2
     };
 
     // Reusable buffer for serialized messages

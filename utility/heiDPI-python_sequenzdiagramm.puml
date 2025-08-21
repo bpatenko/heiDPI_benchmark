@@ -1,0 +1,60 @@
+@startuml
+title Korrigiertes Ablauf des heiDPI Logger (mit Worker-Prozess)
+
+actor User
+participant Main as "Main"
+participant Worker as "Worker Process (heidpi_worker)"
+participant nDPIsrvdSocket as "nDPIsrvdSocket"
+participant ThreadPool as "ThreadPoolExecutor"
+participant LogFile as "LogFile"
+participant Daemon as "nDPIsrvd Daemon"
+
+== Start/Handshake ==
+User -> Main: Programmstart (main())
+activate Main
+Main -> Main: Load config & Validate address
+Main -> Worker: Start Child Process (multiprocessing.Process(target=heidpi_worker))
+activate Worker
+Worker -> nDPIsrvdSocket: connect(address) & loop(callback=heidpi_process_flow_events)
+activate nDPIsrvdSocket
+nDPIsrvdSocket -> Daemon: Connection established
+nDPIsrvdSocket --> Worker: Ready
+
+group Worker wartet auf Events («blocks» in loop)
+  loop bis Verbindung erfolgreich
+    Worker -> nDPIsrvdSocket: Check for events
+    nDPIsrvdSocket --> Worker: Events received
+  end
+end
+
+== Parallelbetrieb (Flow Events als Beispiel) ==
+par Flow Events
+      note over Worker,LogFile
+        Ähnlich für Packet, Daemon, Error in separaten Worker-Prozessen
+      end note
+  loop while running
+    Daemon -> nDPIsrvdSocket: Send JSON (flow_event)
+    nDPIsrvdSocket -> Worker: heidpi_process_flow_events(json_dict, instance, current_flow)
+    Worker -> ThreadPool: Submit heidpi_log_event(FLOW_CONFIG, json_dict, heidpi_flow_processing)
+    activate ThreadPool
+    ThreadPool -> Worker: heidpi_flow_processing(config_dict, json_dict)  ' GeoIP2 processing
+    ThreadPool -> LogFile: Write JSON to flow_log.json
+    LogFile --> ThreadPool: Write complete
+    ThreadPool --> Worker: Task complete
+    deactivate ThreadPool
+    Worker --> nDPIsrvdSocket: Return True
+  end
+end
+
+== Abbruch ==
+User -> Main: SIGINT / SIGTERM
+Main -> Worker: Terminate process
+deactivate Worker
+Main -> nDPIsrvdSocket: shutdown()
+deactivate nDPIsrvdSocket
+Main -> ThreadPool: Shutdown pools
+deactivate ThreadPool
+Main --> User: Program terminated.
+deactivate Main
+
+@enduml
