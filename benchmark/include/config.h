@@ -2,12 +2,21 @@
 #define CONFIG_H
 
 #include <string>
+#include <vector>
+#include <utility>
 
 struct GeneratorParams {
     std::string host;
     int port;
     double rate;
     size_t message_size;
+};
+
+struct EventProbabilities {
+    double flow{0.25};
+    double daemon{0.25};
+    double error{0.25};
+    double packet{0.25};
 };
 
 struct Config {
@@ -17,8 +26,10 @@ struct Config {
     std::string loggerConfigPath;
     std::string outputFilePath;
     std::string scenarioPath;
-    bool        straceEnabled;   // run logger via strace
-    GeneratorParams generatorParams;
+    bool                straceEnabled;   // run logger via strace
+    GeneratorParams     generatorParams;
+    EventProbabilities  eventProbabilities;
+    std::vector<std::pair<std::string, std::string>> loggerEventParams;
 };
 
 Config loadConfig(const std::string& path);

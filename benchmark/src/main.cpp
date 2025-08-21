@@ -163,13 +163,15 @@ int main(int argc, char* argv[]) {
                 config.loggerBinary,
                 config.generatorParams.host,
                 config.generatorParams.port,
-                config.loggerConfigPath);
+                config.loggerConfigPath,
+                config.loggerEventParams);
         } else {
             loggerPid = launchPythonLoggerStrace(
                 config.loggerModule,
                 config.generatorParams.host,
                 config.generatorParams.port,
-                config.loggerConfigPath);
+                config.loggerConfigPath,
+                config.loggerEventParams);
         }
     } else {
         if (config.loggerType == "binary") {
@@ -177,13 +179,15 @@ int main(int argc, char* argv[]) {
                 config.loggerBinary,
                 config.generatorParams.host,
                 config.generatorParams.port,
-                config.loggerConfigPath);
+                config.loggerConfigPath,
+                config.loggerEventParams);
         } else {
             loggerPid = launchPythonLogger(
                 config.loggerModule,
                 config.generatorParams.host,
                 config.generatorParams.port,
-                config.loggerConfigPath);
+                config.loggerConfigPath,
+                config.loggerEventParams);
         }
     }
     std::cout << "Started heiDPI_logger (PID: " << loggerPid << ")" << std::endl;
@@ -197,7 +201,10 @@ int main(int argc, char* argv[]) {
     }
 
     // Start generator thread now that a client is connected
-    std::thread genThread(startGenerator, clientSock, std::ref(running));
+    std::thread genThread(startGenerator,
+                          clientSock,
+                          std::ref(running),
+                          config.eventProbabilities);
 
     // Start watcher and analyzer threads
     std::thread watchThread(startWatcher,
