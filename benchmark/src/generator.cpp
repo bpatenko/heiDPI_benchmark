@@ -74,23 +74,18 @@ static json buildDaemonEvent(uint64_t packetId,
         {"thread_id", 0},
         {"packet_id", packetId},
         {"daemon_event_id", daemonEventId},
-        {"daemon_event_name", "status"},
-        {"packets-captured", 0},
-        {"packets-processed", 0},
-        {"total-skipped-flows", 0},
-        {"total-l4-payload-len", 0},
-        {"total-not-detected-flows", 0},
-        {"total-guessed-flows", 0},
-        {"total-detected-flows", 0},
-        {"total-detection-updates", 0},
-        {"total-updates", 0},
-        {"current-active-flows", 0},
-        {"total-active-flows", 0},
-        {"total-idle-flows", 0},
-        {"total-compressions", 0},
-        {"total-compression-diff", 0},
-        {"current-compression-diff", 0},
-        {"total-events-serialized", 0},
+        {"daemon_event_name", "init"},
+        {"max-flows-per-thread", 2048},
+        {"max-idle-flows-per-thread", 64},
+        {"reader-thread-count", 10},
+        {"flow-scan-interval", 10000000},
+        {"generic-max-idle-time", 600000000},
+        {"icmp-max-idle-time", 120000000},
+        {"udp-max-idle-time", 180000000},
+        {"tcp-max-idle-time", 7560000000},
+        {"max-packets-per-flow-to-send", 15},
+        {"max-packets-per-flow-to-process", 32},
+        {"max-packets-per-flow-to-analyse", 32},
         {"global_ts_usec", ts_usec}
     };
 }
@@ -101,7 +96,6 @@ static json buildErrorEvent(uint64_t packetId,
     return {
         {"alias", "benchmark"},
         {"source", "benchmark"},
-        {"thread_id", 0},
         {"packet_id", packetId},
         {"error_event_id", errorEventId},
         {"error_event_name", "Unknown packet type"},
@@ -110,7 +104,6 @@ static json buildErrorEvent(uint64_t packetId,
         {"threshold_n_max", 1},
         {"threshold_time", 1},
         {"threshold_ts_usec", ts_usec},
-        {"layer_type", 1},
         {"global_ts_usec", ts_usec}
     };
 }
@@ -120,11 +113,18 @@ static json buildPacketEvent(uint64_t packetId,
                              uint64_t& flowId,
                              uint64_t& flowPacketId,
                              uint64_t ts_usec) {
-    json j = {
+    return {
         {"alias", "benchmark"},
         {"source", "benchmark"},
+        {"thread_id", 0},
         {"packet_id", packetId},
         {"packet_event_id", packetEventId},
+        {"packet_event_name", "packet-flow"},
+        {"flow_id", ++flowId},
+        {"flow_packet_id", flowPacketId++},
+        {"flow_src_last_pkt_time", ts_usec},
+        {"flow_dst_last_pkt_time", ts_usec},
+        {"flow_idle_time", 10},
         {"pkt_caplen", 64},
         {"pkt_type", 0},
         {"pkt_l3_offset", 14},
@@ -133,18 +133,6 @@ static json buildPacketEvent(uint64_t packetId,
         {"pkt_l4_len", 20},
         {"thread_ts_usec", ts_usec}
     };
-    if (std::rand() % 2 == 0) {
-        j["packet_event_name"] = "packet";
-    } else {
-        j["packet_event_name"] = "packet-flow";
-        j["thread_id"] = 0;
-        j["flow_id"] = ++flowId;
-        j["flow_packet_id"] = flowPacketId++;
-        j["flow_src_last_pkt_time"] = ts_usec;
-        j["flow_dst_last_pkt_time"] = ts_usec;
-        j["flow_idle_time"] = 10;
-    }
-    return j;
 }
 
 void startGenerator(int client,
