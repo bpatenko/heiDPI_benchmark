@@ -13,6 +13,7 @@
 #include <thread>
 
 #include <nlohmann/json.hpp>
+#include <sys/socket.h>
 
 using json = nlohmann::json;
 
@@ -243,30 +244,22 @@ void startGenerator(int client, std::atomic<bool> &running,
             }
             ++packetId;
 
-            // Serialize JSON with a length prefix.  The message string
-            // reserves five bytes at the beginning for the decimal
-            // length of the payload.  We then copy the length into
-            // that prefix and send the message over the socket.
-            message.clear();
-            message.resize(5); // placeholder for length prefix
+            // Serialize the JSON to a string.  We prefix the output with a
+            // five‑character decimal length so that the reader knows how
+            // many bytes to expect.
             {
-                // Use nlohmann::json serializer to write into the
-                // existing string buffer (skipping the prefix).
-                nlohmann::detail::output_adapter<char *> oa(
-                    &message[0] + 5);
-                nlohmann::detail::serializer<nlohmann::json::value_type>
-                    writer(oa, ' ',
-                           nlohmann::detail::error_handler_t::strict);
-                writer.dump(j, false, false, 0);
+                message.clear();
+                std::string body = j.dump();
+                // Create a five character prefix containing the length of the
+                // body.  The length is padded with leading zeros if needed.
+                char prefix[6];
+                std::snprintf(prefix, sizeof(prefix), "%05zu", body.size());
+                message.append(prefix, 5);
+                message.append(body);
             }
-            // Write the length into the first five characters
-            char prefix[6];
-            std::snprintf(prefix, sizeof(prefix), "%05zu",
-                          message.size() - 5);
-            std::memcpy(message.data(), prefix, 5);
 
             // Send the message; if the send fails we log and exit.
-            if (send(client, message.data(), message.size(), 0) < 0) {
+            if (::send(client, message.data(), message.size(), 0) < 0) {
                 std::cerr << "Generator: send() failed, exiting" << std::endl;
                 break;
             }
