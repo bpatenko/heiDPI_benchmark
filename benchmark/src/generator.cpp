@@ -71,8 +71,8 @@ static json buildFlowEvent(uint64_t packetId, uint64_t flowEventId,
         {"l4_proto", "tcp"},
         {"midstream", 0},
         {"thread_ts_usec", ts_usec},
-        {"src_ip", "192.168.0.1"},
-        {"dst_ip", "192.168.0.2"}
+        {"src_ip", "8.8.8.8"},
+        {"dst_ip", "4.4.4.4"}
     };
 }
 
