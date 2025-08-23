@@ -1,6 +1,6 @@
 {
   "mode": "manual",
-  "interval": 30,
+  "interval": 60,
   "scenarios": [
     {
       "mode": "IDLE",

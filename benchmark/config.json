@@ -14,15 +14,15 @@
     "message_size": 128
   },
   "eventProbabilities": {
-    "flow": 0.25,
-    "daemon": 0.25,
-    "error": 0.25,
-    "packet": 0.25
+    "flow": 1,
+    "daemon": 0,
+    "error": 0,
+    "packet": 0
   },
   "eventParams": {
     "--show-flow-events": "1",
-    "--show-daemon-events": "1",
-    "--show-packet-events": "1",
-    "--show-error-events": "1"
+    "--show-daemon-events": "0",
+    "--show-packet-events": "0",
+    "--show-error-events": "0"
   }
 }
