@@ -2,7 +2,6 @@
 #include "sample_queue.h"
 
 #include <nlohmann/json.hpp>
-
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -132,6 +131,30 @@ static bool readProcMemTree(pid_t pid, uint64_t& totalKb) {
     return true;
 }
 
+// NEW: Recursively sum CPU times (utime+stime) for process and all children
+static bool readProcCpuTree(pid_t pid, uint64_t& total) {
+    total = 0;
+    uint64_t cpu = 0;
+    // Add CPU time for this process
+    if (readProcCpu(pid, cpu)) {
+        total += cpu;
+    }
+    // Read children and accumulate their CPU times
+    std::string childrenPath = "/proc/" + std::to_string(pid)
+                               + "/task/" + std::to_string(pid)
+                               + "/children";
+    std::ifstream cf(childrenPath);
+    if (cf.is_open()) {
+        pid_t child;
+        while (cf >> child) {
+            uint64_t childCpu = 0;
+            readProcCpuTree(child, childCpu);
+            total += childCpu;
+        }
+    }
+    return true;
+}
+
 // The watcher monitors the given file via inotify. Whenever the file is modified
 // new lines are read and written together with an additional timestamp into a
 // companion file "<path>.watch".
@@ -149,7 +172,6 @@ void startWatcher(const std::string& path,
             return;
         }
     }
-
 
     // Open the file for reading. We keep the stream open and only read newly
     // appended lines.
@@ -172,7 +194,8 @@ void startWatcher(const std::string& path,
     uint64_t prevTotalCpu = 0, prevIdleCpu = 0, prevProcCpu = 0;
     readTotalCpu(prevTotalCpu, prevIdleCpu);
     if (loggerPid > 0) {
-        readProcCpu(loggerPid, prevProcCpu);
+        // Initialize with aggregate CPU of the whole process tree
+        readProcCpuTree(loggerPid, prevProcCpu);
     }
 
     int fd = inotify_init1(IN_NONBLOCK);
@@ -195,8 +218,8 @@ void startWatcher(const std::string& path,
         FD_ZERO(&rfds);
         FD_SET(fd, &rfds);
 
-        // Warte bis zu einer Sekunde, damit wir periodisch running prüfen können.
-        struct timeval tv {1, 0};
+        // Wait up to one second so that we can periodically check running
+        struct timeval tv{1, 0};
         int ret = select(fd + 1, &rfds, nullptr, nullptr, &tv);
 
         if (ret > 0 && FD_ISSET(fd, &rfds)) {
@@ -205,7 +228,7 @@ void startWatcher(const std::string& path,
                 continue;
             }
 
-            // Alle neu angehängten Zeilen verarbeiten
+            // Process all newly appended lines
             std::string line;
             while (std::getline(in, line)) {
                 uint64_t watchTs = currentTimeUSec();
@@ -225,7 +248,7 @@ void startWatcher(const std::string& path,
                 out << outObj.dump() << std::endl;
                 queue.enqueue(Sample{pktId, genTs, watchTs});
             }
-            // EOF-Flag zurücksetzen, damit getline nach neuen Daten funktioniert
+            // Reset EOF flag so that getline works on new data
             in.clear();
         }
 
@@ -241,7 +264,7 @@ void startWatcher(const std::string& path,
             prevTotalCpu = totalCpu;
             prevIdleCpu = idleCpu;
 
-            if (loggerPid > 0 && readProcCpu(loggerPid, procCpu)) {
+            if (loggerPid > 0 && readProcCpuTree(loggerPid, procCpu)) {
                 uint64_t procDiff = procCpu - prevProcCpu;
                 if (totalDiff > 0) {
                     procPercent = (double)procDiff * 100.0 / totalDiff;
@@ -253,7 +276,7 @@ void startWatcher(const std::string& path,
             uint64_t procMem = 0;
             readSystemMem(sysMem);
             if (loggerPid > 0) {
-                // NEU: Speicher des gesamten Prozessbaums erfassen
+                // Measure memory of the entire process tree
                 readProcMemTree(loggerPid, procMem);
             }
 
@@ -267,7 +290,6 @@ void startWatcher(const std::string& path,
             out << statObj.dump() << std::endl;
         }
     }
-
 
     out.flush();
     inotify_rm_watch(fd, wd);
