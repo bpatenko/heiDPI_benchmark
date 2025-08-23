@@ -16,8 +16,8 @@
     {
       "mode": "RAMP",
       "start_rate": 10,
-      "end_rate": 500,
-      "ramp_dur": 10
+      "end_rate": 200,
+      "ramp_dur": 60
     }
   ]
 }
