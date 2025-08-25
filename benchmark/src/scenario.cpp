@@ -117,6 +117,9 @@ ScenarioFile loadScenarioFile(const std::string& path)
     std::string modeStr = j.value("mode", "automatic");
     file.manual = (modeStr == "manual");
     file.interval_seconds = j.value("interval", 30);
+    file.start_index = j.value("start_index", 0);
+    file.kill_after = std::chrono::seconds(j.value("kill_after", 0));
+
 
     if (j.contains("scenarios") && j["scenarios"].is_array()) {
         for (const auto& sj : j["scenarios"]) {
