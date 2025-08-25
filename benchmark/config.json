@@ -5,7 +5,7 @@
   "loggerConfigPath": "config.yml",
   "outputFilePath": "flow_event.json",
   "scenarioPath": "scenarios.json",
-  "strace": "disabled",
+  "strace": "enabled",
 
   "generatorParams": {
     "host": "127.0.0.1",
