@@ -8,7 +8,7 @@
     },
     {
       "mode": "BURST",
-      "burst_rate": 1000,
+      "burst_rate": 5000,
       "idle_rate_burst": 350,
       "burst_len": 250,
       "idle_len": 750
