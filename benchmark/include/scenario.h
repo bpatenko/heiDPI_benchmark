@@ -49,6 +49,7 @@ struct ScenarioFile {
     bool manual = false;             // manual selection or automatic
     int interval_seconds = 30;       // default switch interval
     size_t start_index = 0;          // index of initial scenario
+    std::chrono::seconds kill_after{0}; // overall runtime limit; 0 = run indefinitely
     std::vector<ScenarioConfig> scenarios;
 };
 

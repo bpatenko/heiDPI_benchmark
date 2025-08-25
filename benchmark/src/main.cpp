@@ -55,13 +55,26 @@ static void startSwitcher(const ScenarioFile& cfg, std::atomic<bool>& running) {
     size_t idx = (cfg.start_index < presets.size()) ? cfg.start_index : 0;    std::atomic_store_explicit(&gScenario, presets[idx], std::memory_order_release);
     std::cout << "[Switcher] Scenario #" << idx << " active" << std::endl;
 
+    auto start_time = std::chrono::steady_clock::now();
+
+
     if (cfg.manual) {
         while (running.load()) {
+            if (cfg.kill_after.count() > 0 &&
+                std::chrono::steady_clock::now() - start_time >= cfg.kill_after) {
+                running = false;
+                break;
+    }
             printManualMenu(presets);
 
             std::string line;
             bool gotLine = false;
             while (running.load() && !gotLine) {
+                if (cfg.kill_after.count() > 0 &&
+                    std::chrono::steady_clock::now() - start_time >= cfg.kill_after) {
+                    running = false;
+                    break;
+                    }
                 fd_set rfds;
                 FD_ZERO(&rfds);
                 FD_SET(STDIN_FILENO, &rfds);
@@ -105,16 +118,32 @@ static void startSwitcher(const ScenarioFile& cfg, std::atomic<bool>& running) {
         }
     } else {
         while (running.load()) {
+            if (cfg.kill_after.count() > 0 &&
+    std::chrono::steady_clock::now() - start_time >= cfg.kill_after) {
+                running = false;
+                break;
+    }
             auto dur = presets[idx]->hold_dur.count()
                            ? presets[idx]->hold_dur
                            : std::chrono::seconds(cfg.interval_seconds);
             if (dur.count() < 0) {
                 while (running.load()) {
+                    if (cfg.kill_after.count() > 0 &&
+                        std::chrono::steady_clock::now() - start_time >= cfg.kill_after) {
+                        running = false;
+                        break;
+                        }
                     std::this_thread::sleep_for(1s);
                 }
                 break;
             }
-            for (int s = 0; s < dur.count() && running.load(); ++s) {                std::this_thread::sleep_for(1s);
+            for (int s = 0; s < dur.count() && running.load(); ++s) {
+                if (cfg.kill_after.count() > 0 &&
+                    std::chrono::steady_clock::now() - start_time >= cfg.kill_after) {
+                    running = false;
+                    break;
+                    }
+                std::this_thread::sleep_for(1s);
             }
             if (!running.load()) {
                 break;
