@@ -22,7 +22,9 @@ struct ScenarioConfig {
     double start_rate         = 500.0;
     double end_rate           = 20'000.0;
     std::chrono::seconds ramp_dur {10};
-    std::chrono::seconds hold_dur {5};
+    // active duration for this scenario; 0 = use global interval,
+    // negative = run indefinitely
+    std::chrono::seconds hold_dur {0};
 
     // ---- intern ---- (Sender füllt, Switcher lässt unangetastet)
     mutable uint64_t pkt_sent = 0;
@@ -45,7 +47,8 @@ Mode modeFromString(const std::string& name);
 
 struct ScenarioFile {
     bool manual = false;             // manual selection or automatic
-    int interval_seconds = 30;       // switch interval for automatic mode
+    int interval_seconds = 30;       // default switch interval
+    size_t start_index = 0;          // index of initial scenario
     std::vector<ScenarioConfig> scenarios;
 };
 

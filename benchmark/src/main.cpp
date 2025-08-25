@@ -52,8 +52,7 @@ static void startSwitcher(const ScenarioFile& cfg, std::atomic<bool>& running) {
         presets.push_back(std::make_shared<ScenarioConfig>());
     }
 
-    size_t idx = 0;
-    std::atomic_store_explicit(&gScenario, presets[idx], std::memory_order_release);
+    size_t idx = (cfg.start_index < presets.size()) ? cfg.start_index : 0;    std::atomic_store_explicit(&gScenario, presets[idx], std::memory_order_release);
     std::cout << "[Switcher] Scenario #" << idx << " active" << std::endl;
 
     if (cfg.manual) {
@@ -106,8 +105,19 @@ static void startSwitcher(const ScenarioFile& cfg, std::atomic<bool>& running) {
         }
     } else {
         while (running.load()) {
-            for (int s = 0; s < cfg.interval_seconds && running.load(); ++s) {
-                std::this_thread::sleep_for(1s);
+            auto dur = presets[idx]->hold_dur.count()
+                           ? presets[idx]->hold_dur
+                           : std::chrono::seconds(cfg.interval_seconds);
+            if (dur.count() < 0) {
+                while (running.load()) {
+                    std::this_thread::sleep_for(1s);
+                }
+                break;
+            }
+            for (int s = 0; s < dur.count() && running.load(); ++s) {                std::this_thread::sleep_for(1s);
+            }
+            if (!running.load()) {
+                break;
             }
             idx = (idx + 1) % presets.size();
             std::atomic_store_explicit(&gScenario, presets[idx], std::memory_order_release);
