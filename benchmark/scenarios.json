@@ -2,7 +2,7 @@
   "mode": "automatic",
   "start_index": 2,
   "interval": 60,
-  "kill_after": 200,
+  "kill_after": 100,
   "scenarios": [
     {
       "mode": "IDLE",
@@ -19,7 +19,7 @@
     },
     {
       "mode": "RAMP",
-      "start_rate": 10,
+      "start_rate": 50,
       "end_rate": 200,
       "ramp_dur": 60,
       "hold_dur": 60
