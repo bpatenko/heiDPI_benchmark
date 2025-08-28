@@ -36,7 +36,7 @@ Mode modeFromString(const std::string& s)
         return Mode::IDLE;
     if (s == "BURST" || s == "burst")
         return Mode::BURST;
-    if (s == "RAMP" || s == "ramp")
+    if (s == "RAMP" || s == "ramp-python")
         return Mode::RAMP;
     return Mode::IDLE;
 }

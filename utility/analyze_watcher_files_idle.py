@@ -9,7 +9,7 @@ import seaborn as sns
 # ===================== Einstellungen =====================
 
 basedir = "../benchmark_results"   # Ordner mit .json.watch-Dateien
-include_pattern = None   # z.B. r"idle" oder r"ramp" → nur diese Dateien laden
+include_pattern = None   # z.B. r"idle" oder r"ramp-python" → nur diese Dateien laden
 memory_source = "logger" # "logger" (Prozess) oder "total" (System)
 
 # ===================== Parser =====================
