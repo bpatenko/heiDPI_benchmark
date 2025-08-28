@@ -3,14 +3,19 @@
 #include "NDPIClient.hpp"
 #include "EventProcessor.hpp"
 
-#include <algorithm>
-#include <cstdlib>
 #include <filesystem>
-#include <iostream>
-#include <sstream>
 #include <string>
-#include <thread>
 #include <vector>
+#include <iostream>
+#include <chrono>
+#include <iomanip>
+
+// additional headers for queue buffering
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <atomic>
 
 // Same CLI options structure as original
 struct CLIOptions {
@@ -135,49 +140,83 @@ int main(int argc, char **argv) {
         if (!opts.unix_path.empty())
             client.connectUnix(opts.unix_path);
         else
-            client.connectTcp(opts.host, static_cast<unsigned short>(opts.port));
+            client.connectTcp(opts.host, static_cast (opts.port));
     } catch (const std::exception &ex) {
         Logger::error(std::string("Failed to connect: ") + ex.what());
         return 1;
     }
 
-    // Process events in the same thread (could be moved to its own thread if needed)
-    client.loop([&](const nlohmann::json &j) {
-        // Determine the event key and name; default to empty
-        std::string key;
-        std::string name;
-        if (j.contains("flow_event_name")) {
-            key = "flow_event_name";
-            name = j["flow_event_name"].get<std::string>();
-        } else if (j.contains("packet_event_name")) {
-            key = "packet_event_name";
-            name = j["packet_event_name"].get<std::string>();
-        } else if (j.contains("daemon_event_name")) {
-            key = "daemon_event_name";
-            name = j["daemon_event_name"].get<std::string>();
-        } else if (j.contains("error_event_name")) {
-            key = "error_event_name";
-            name = j["error_event_name"].get<std::string>();
-        } else {
-            // unknown event type
-            Logger::info("Received unknown event: missing event name");
-            return;
-        }
+    // queue and synchronization primitives
+    std::queue  eventQueue;
+    std::mutex qMutex;
+    std::condition_variable qCV;
+    std::atomic  done(false);
 
-        // Dispatch event to matching worker(s).  All events are allowed for their type,
-        // so we no longer check config.event_names.  If there is a worker for the
-        // event type, process it; otherwise log a single info.
-        bool handled = false;
-        for (auto &w : workers) {
-            if (w.eventKey != key) continue;  // ignore unmatched types
-            w.processor.process(j);
-            handled = true;
+    // dispatcher thread that consumes events from the queue and processes them
+    std::thread dispatcher([&]() {
+        while (!done.load() || !eventQueue.empty()) {
+            std::unique_lock lock(qMutex);
+            qCV.wait(lock, [&]() {
+                return done.load() || !eventQueue.empty();
+            });
+            if (eventQueue.empty()) {
+                continue;
+            }
+            // pop next event
+            nlohmann::json event = std::move(eventQueue.front());
+            eventQueue.pop();
+            lock.unlock();
+
+            // Determine the event key and name; default to empty
+            std::string key;
+            std::string name;
+            if (event.contains("flow_event_name")) {
+                key = "flow_event_name";
+                name = event["flow_event_name"].get ();
+            } else if (event.contains("packet_event_name")) {
+                key = "packet_event_name";
+                name = event["packet_event_name"].get ();
+            } else if (event.contains("daemon_event_name")) {
+                key = "daemon_event_name";
+                name = event["daemon_event_name"].get ();
+            } else if (event.contains("error_event_name")) {
+                key = "error_event_name";
+                name = event["error_event_name"].get ();
+            } else {
+                // unknown event type
+                Logger::info("Received unknown event: missing event name");
+                continue;
+            }
+            // Dispatch event to matching worker(s)
+            bool handled = false;
+            for (auto &w : workers) {
+                if (w.eventKey != key) continue;
+                w.processor.process(event);
+                handled = true;
+            }
+            if (!handled) {
+                // No worker configured for this event type
+                Logger::info("No handler enabled for event '" + name + "' of type " + key);
+            }
         }
-        if (!handled) {
-            // No worker configured for this event type
-            Logger::info("No handler enabled for event '" + name + "' of type " + key);
+    });
+
+    // Process events: read them and push to the queue. We do not process them
+    // here to avoid blocking the socket reader. The callback simply enqueues
+    // each JSON payload and notifies the dispatcher.
+    client.loop([&](const nlohmann::json &j) {
+        {
+            std::lock_guard lock(qMutex);
+            eventQueue.push(j);
         }
+        qCV.notify_one();
     }, opts.filter);
+
+    // signal that no more events will arrive and wait for the dispatcher to
+    // finish processing the remaining buffered events
+    done = true;
+    qCV.notify_all();
+    dispatcher.join();
 
     return 0;
 }
