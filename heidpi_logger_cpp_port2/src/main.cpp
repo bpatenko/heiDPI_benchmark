@@ -11,6 +11,8 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <deque>
+#include <chrono>
 
 // Same CLI options structure as original
 struct CLIOptions {
@@ -141,43 +143,59 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    // Process events in the same thread (could be moved to its own thread if needed)
-    client.loop([&](const nlohmann::json &j) {
-        // Determine the event key and name; default to empty
-        std::string key;
-        std::string name;
-        if (j.contains("flow_event_name")) {
-            key = "flow_event_name";
-            name = j["flow_event_name"].get<std::string>();
-        } else if (j.contains("packet_event_name")) {
-            key = "packet_event_name";
-            name = j["packet_event_name"].get<std::string>();
-        } else if (j.contains("daemon_event_name")) {
-            key = "daemon_event_name";
-            name = j["daemon_event_name"].get<std::string>();
-        } else if (j.contains("error_event_name")) {
-            key = "error_event_name";
-            name = j["error_event_name"].get<std::string>();
-        } else {
-            // unknown event type
-            Logger::info("Received unknown event: missing event name");
-            return;
+    std::deque<nlohmann::json> q;
+
+    // Parameter ggf. anpassen:
+    constexpr std::size_t Q_MAX   = 10'000; // maximale Queue-Größe
+    constexpr int READ_BURST      = 1;    // Events werden sofort abgearbeitet
+    constexpr int PROCESS_BURST   = 100;    // wie viele verarbeiten pro Zyklus
+    constexpr auto IDLE_SLEEP     = std::chrono::milliseconds(1); // um busy-wait zu vermeiden
+
+    bool peerClosed = false;
+
+    while (true) {
+        // 1) Einlesen solange Platz ist
+        int readCount = 0;
+        while (q.size() < Q_MAX && readCount < READ_BURST) {
+            nlohmann::json ev;
+            std::string key, name, err;
+            if (!client.read_one(ev, key, name, err)) {
+                if (err == "eof") peerClosed = true;
+                break; // nichts oder Fehler -> wir gehen zum Verarbeiten über
+            }
+            if (!key.empty()) q.emplace_back(std::move(ev));
+            ++readCount;
         }
 
-        // Dispatch event to matching worker(s).  All events are allowed for their type,
-        // so we no longer check config.event_names.  If there is a worker for the
-        // event type, process it; otherwise log a single info.
-        bool handled = false;
-        for (auto &w : workers) {
-            if (w.eventKey != key) continue;  // ignore unmatched types
-            w.processor.process(j);
-            handled = true;
+        // 2) Verarbeiten (bremst bewusst das Lesen)
+        int procCount = 0;
+        while (!q.empty() && procCount < PROCESS_BURST) {
+            nlohmann::json ev = std::move(q.front()); q.pop_front();
+
+            std::string key;
+            if (ev.contains("flow_event_name"))        key = "flow_event_name";
+            else if (ev.contains("packet_event_name")) key = "packet_event_name";
+            else if (ev.contains("daemon_event_name")) key = "daemon_event_name";
+            else if (ev.contains("error_event_name"))  key = "error_event_name";
+
+            bool handled = false;
+            for (auto &w : workers) {
+                if (w.eventKey != key) continue;
+                w.processor.process(ev);
+                handled = true;
+            }
+            (void)handled; // optional Logging wenn false
+            ++procCount;
         }
-        if (!handled) {
-            // No worker configured for this event type
-            Logger::info("No handler enabled for event '" + name + "' of type " + key);
+
+        // 3) Abbruchbedingung: Peer zu, nichts mehr in Queue
+        if (peerClosed && q.empty()) break;
+
+        // 4) Mini-Schlaf, damit die Schleife nicht 100% CPU zieht (kein Threading!)
+        if (readCount == 0 && procCount == 0) {
+            std::this_thread::sleep_for(IDLE_SLEEP);
         }
-    }, opts.filter);
+    }
 
     return 0;
 }
