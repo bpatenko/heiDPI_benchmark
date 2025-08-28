@@ -12,7 +12,11 @@
 #include <thread>
 #include <vector>
 
-// Same CLI options structure as original
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+
 struct CLIOptions {
     std::string host{"127.0.0.1"};
     std::string unix_path{};
@@ -26,13 +30,11 @@ struct CLIOptions {
     bool show_flow{false};
 };
 
-// Helper to read environment variables or fall back to a default
 static std::string envOrDefault(const char *env, const std::string &def) {
     const char *v = std::getenv(env);
     return v ? std::string(v) : def;
 }
 
-// Parse command line and environment into CLIOptions
 CLIOptions parse(int argc, char **argv) {
     CLIOptions o;
     o.host = envOrDefault("HOST", o.host);
@@ -77,17 +79,16 @@ CLIOptions parse(int argc, char **argv) {
     return o;
 }
 
-// Struct to bundle an event handler with its configuration
 struct Worker {
-    std::string eventKey;      // key in JSON indicating this event type
-    EventConfig config;        // copy of configuration for this type
-    EventProcessor processor;  // processor instance
+    std::string eventKey;
+    EventConfig config;
+    EventProcessor processor;
     Worker(const std::string &k, const EventConfig &c, const std::string &dir)
         : eventKey(k), config(c), processor(c, dir) {}
 };
 
 int main(int argc, char **argv) {
-    // quick help check
+    // Help kurz vorher abfangen (wie im Original)
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "-h" || a == "--help") {
@@ -102,82 +103,102 @@ int main(int argc, char **argv) {
             return 0;
         }
     }
-    // parse options
+
     CLIOptions opts = parse(argc, argv);
-    // load configuration
     Config cfg(opts.config_path);
-    // initialize logger
     Logger::init(cfg.logging());
 
-    // Build a list of workers (event type + processor) according to CLI flags
     std::vector<Worker> workers;
     workers.reserve(4);
-    if (opts.show_flow) {
-        workers.emplace_back("flow_event_name", cfg.flowEvent(), opts.write_path);
-    }
-    if (opts.show_packet) {
-        workers.emplace_back("packet_event_name", cfg.packetEvent(), opts.write_path);
-    }
-    if (opts.show_daemon) {
-        workers.emplace_back("daemon_event_name", cfg.daemonEvent(), opts.write_path);
-    }
-    if (opts.show_error) {
-        workers.emplace_back("error_event_name", cfg.errorEvent(), opts.write_path);
-    }
+    if (opts.show_flow)   workers.emplace_back("flow_event_name",   cfg.flowEvent(),   opts.write_path);
+    if (opts.show_packet) workers.emplace_back("packet_event_name", cfg.packetEvent(), opts.write_path);
+    if (opts.show_daemon) workers.emplace_back("daemon_event_name", cfg.daemonEvent(), opts.write_path);
+    if (opts.show_error)  workers.emplace_back("error_event_name",  cfg.errorEvent(),  opts.write_path);
+
     if (workers.empty()) {
         Logger::error("No event types enabled. Use --show-*_events flags to enable processing.");
         return 1;
     }
 
-    // Start single client connection
     NDPIClient client;
     try {
         if (!opts.unix_path.empty())
             client.connectUnix(opts.unix_path);
         else
-            client.connectTcp(opts.host, static_cast<unsigned short>(opts.port));
+            client.connectTcp(opts.host, static_cast<unsigned short>(opts.port)); // FIX
     } catch (const std::exception &ex) {
         Logger::error(std::string("Failed to connect: ") + ex.what());
         return 1;
     }
 
-    // Process events in the same thread (could be moved to its own thread if needed)
-    client.loop([&](const nlohmann::json &j) {
-        // Determine the event key and name; default to empty
-        std::string key;
-        std::string name;
-        if (j.contains("flow_event_name")) {
-            key = "flow_event_name";
-            name = j["flow_event_name"].get<std::string>();
-        } else if (j.contains("packet_event_name")) {
-            key = "packet_event_name";
-            name = j["packet_event_name"].get<std::string>();
-        } else if (j.contains("daemon_event_name")) {
-            key = "daemon_event_name";
-            name = j["daemon_event_name"].get<std::string>();
-        } else if (j.contains("error_event_name")) {
-            key = "error_event_name";
-            name = j["error_event_name"].get<std::string>();
-        } else {
-            // unknown event type
-            Logger::info("Received unknown event: missing event name");
-            return;
-        }
+    // -------------------------
+    // NEU: FIFO-Queue + Dispatcher
+    // -------------------------
+    std::queue<nlohmann::json> eventQueue;         // FIX: Typ-Parameter
+    std::mutex mtx;
+    std::condition_variable cv;
+    std::atomic<bool> done{false};
 
-        // Dispatch event to matching worker(s).  All events are allowed for their type,
-        // so we no longer check config.event_names.  If there is a worker for the
-        // event type, process it; otherwise log a single info.
-        bool handled = false;
-        for (auto &w : workers) {
-            if (w.eventKey != key) continue;  // ignore unmatched types
-            w.processor.process(j);
-            handled = true;
+    // Dispatcher-Thread (arbeitet streng nacheinander ab)
+    std::thread dispatcher([&]{
+        while (true) {
+            nlohmann::json event;
+            {
+                std::unique_lock<std::mutex> lk(mtx);
+                cv.wait(lk, [&]{ return done || !eventQueue.empty(); });
+                if (done && eventQueue.empty()) break;
+                event = std::move(eventQueue.front());
+                eventQueue.pop();
+            }
+
+            // Event-Typ ermitteln & Namen lesen
+            std::string key;
+            std::string name;
+            if (event.contains("flow_event_name")) {
+                key = "flow_event_name";
+                name = event["flow_event_name"].get<std::string>();   // FIX: get<T>()
+            } else if (event.contains("packet_event_name")) {
+                key = "packet_event_name";
+                name = event["packet_event_name"].get<std::string>(); // FIX: get<T>()
+            } else if (event.contains("daemon_event_name")) {
+                key = "daemon_event_name";
+                name = event["daemon_event_name"].get<std::string>(); // FIX: get<T>()
+            } else if (event.contains("error_event_name")) {
+                key = "error_event_name";
+                name = event["error_event_name"].get<std::string>();  // FIX: get<T>()
+            } else {
+                Logger::info("Received unknown event: missing event name");
+                continue;
+            }
+
+            bool handled = false;
+            for (auto &w : workers) {
+                if (w.eventKey != key) continue;
+                w.processor.process(event);
+                handled = true;
+            }
+            if (!handled) {
+                Logger::info("No handler enabled for event '" + name + "' of type " + key);
+            }
         }
-        if (!handled) {
-            // No worker configured for this event type
-            Logger::info("No handler enabled for event '" + name + "' of type " + key);
+    });
+
+    // Reader: liest nonstop und füttert nur die Queue
+    client.loop([&](const nlohmann::json &j) {
+        {
+            std::lock_guard<std::mutex> lk(mtx);
+            eventQueue.push(j);
         }
+        cv.notify_one();
     }, opts.filter);
+
+    // Nach Abbruch der Verbindung: Queue leeren lassen und Thread beenden
+    {
+        std::lock_guard<std::mutex> lk(mtx);
+        done = true;
+    }
+    cv.notify_all();
+    dispatcher.join();
 
     return 0;
 }
