@@ -213,6 +213,8 @@ void startWatcher(const std::string& path,
 
     char buf[sizeof(struct inotify_event) + NAME_MAX + 1];
 
+    auto nextStatTime = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+
     while (running.load()) {
         fd_set rfds;
         FD_ZERO(&rfds);
@@ -252,42 +254,47 @@ void startWatcher(const std::string& path,
             in.clear();
         }
 
-        uint64_t totalCpu = 0, idleCpu = 0, procCpu = 0;
-        if (readTotalCpu(totalCpu, idleCpu)) {
-            double totalPercent = 0.0;
-            double procPercent = 0.0;
-            uint64_t totalDiff = totalCpu - prevTotalCpu;
-            uint64_t idleDiff = idleCpu - prevIdleCpu;
-            if (totalDiff > 0) {
-                totalPercent = (double)(totalDiff - idleDiff) * 100.0 / totalDiff;
-            }
-            prevTotalCpu = totalCpu;
-            prevIdleCpu = idleCpu;
+        auto now = std::chrono::steady_clock::now();
+        if (now >= nextStatTime) {
+            nextStatTime += std::chrono::seconds(1);
 
-            if (loggerPid > 0 && readProcCpuTree(loggerPid, procCpu)) {
-                uint64_t procDiff = procCpu - prevProcCpu;
+            uint64_t totalCpu = 0, idleCpu = 0, procCpu = 0;
+            if (readTotalCpu(totalCpu, idleCpu)) {
+                double totalPercent = 0.0;
+                double procPercent = 0.0;
+                uint64_t totalDiff = totalCpu - prevTotalCpu;
+                uint64_t idleDiff = idleCpu - prevIdleCpu;
                 if (totalDiff > 0) {
-                    procPercent = (double)procDiff * 100.0 / totalDiff;
+                    totalPercent = (double)(totalDiff - idleDiff) * 100.0 / totalDiff;
                 }
-                prevProcCpu = procCpu;
-            }
+                prevTotalCpu = totalCpu;
+                prevIdleCpu = idleCpu;
 
-            uint64_t sysMem = 0;
-            uint64_t procMem = 0;
-            readSystemMem(sysMem);
-            if (loggerPid > 0) {
-                // Measure memory of the entire process tree
-                readProcMemTree(loggerPid, procMem);
-            }
+                if (loggerPid > 0 && readProcCpuTree(loggerPid, procCpu)) {
+                    uint64_t procDiff = procCpu - prevProcCpu;
+                    if (totalDiff > 0) {
+                        procPercent = (double)procDiff * 100.0 / totalDiff;
+                    }
+                    prevProcCpu = procCpu;
+                }
 
-            json statObj = {
-                {"timestamp", currentTimeUSec()},
-                {"total_cpu", totalPercent},
-                {"total_memory", sysMem},
-                {"logger_cpu", procPercent},
-                {"logger_memory", procMem}
-            };
-            out << statObj.dump() << std::endl;
+                uint64_t sysMem = 0;
+                uint64_t procMem = 0;
+                readSystemMem(sysMem);
+                if (loggerPid > 0) {
+                    // Measure memory of the entire process tree
+                    readProcMemTree(loggerPid, procMem);
+                }
+
+                json statObj = {
+                    {"timestamp", currentTimeUSec()},
+                    {"total_cpu", totalPercent},
+                    {"total_memory", sysMem},
+                    {"logger_cpu", procPercent},
+                    {"logger_memory", procMem}
+                };
+                out << statObj.dump() << std::endl;
+            }
         }
     }
 
