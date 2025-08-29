@@ -47,18 +47,9 @@ std::chrono::microseconds nextInterval(const ScenarioConfig& c)
     case Mode::IDLE:
         return us(static_cast<uint64_t>(1'000'000.0 / c.idle_rate));
 
-    case Mode::BURST: {
-        const uint64_t burst_pkts =
-            static_cast<uint64_t>(c.burst_rate * c.burst_len.count() / 1000.0);
-        const uint64_t idle_pkts =
-            static_cast<uint64_t>(c.idle_rate_burst * c.idle_len.count() / 1000.0);
-        const uint64_t cycle_pkts = burst_pkts + idle_pkts;
-        const uint64_t pos        = c.pkt_sent % cycle_pkts;
-        ++c.pkt_sent;
-        bool in_burst = pos < burst_pkts;
-        double rate   = in_burst ? c.burst_rate : c.idle_rate_burst;
-        return us(static_cast<uint64_t>(1'000'000.0 / rate));
-    }
+    case Mode::BURST:
+    return us(static_cast<uint64_t>(1'000'000.0 / c.burst_rate));
+
 
     case Mode::RAMP: {
         uint64_t now_ns =

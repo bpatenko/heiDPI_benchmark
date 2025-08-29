@@ -52,57 +52,36 @@ static void startSwitcher(const ScenarioFile& cfg, std::atomic<bool>& running) {
         presets.push_back(std::make_shared<ScenarioConfig>());
     }
 
-    size_t idx = (cfg.start_index < presets.size()) ? cfg.start_index : 0;    std::atomic_store_explicit(&gScenario, presets[idx], std::memory_order_release);
+    size_t idx = (cfg.start_index < presets.size()) ? cfg.start_index : 0;
+    std::atomic_store_explicit(&gScenario, presets[idx], std::memory_order_release);
     std::cout << "[Switcher] Scenario #" << idx << " active" << std::endl;
 
-    auto start_time = std::chrono::steady_clock::now();
+    const auto start_time = std::chrono::steady_clock::now();
 
+    auto exceeded_kill_after = [&](void) -> bool {
+        return cfg.kill_after.count() > 0 &&
+               (std::chrono::steady_clock::now() - start_time) >= cfg.kill_after;
+    };
 
     if (cfg.manual) {
+        // --- Manueller Modus: Menü zeigen, Index einlesen, sofort umschalten ---
         while (running.load()) {
-            if (cfg.kill_after.count() > 0 &&
-                std::chrono::steady_clock::now() - start_time >= cfg.kill_after) {
-                running = false;
-                break;
-    }
+            if (exceeded_kill_after()) { running = false; break; }
+
             printManualMenu(presets);
 
             std::string line;
-            bool gotLine = false;
-            while (running.load() && !gotLine) {
-                if (cfg.kill_after.count() > 0 &&
-                    std::chrono::steady_clock::now() - start_time >= cfg.kill_after) {
-                    running = false;
-                    break;
-                    }
-                fd_set rfds;
-                FD_ZERO(&rfds);
-                FD_SET(STDIN_FILENO, &rfds);
-                struct timeval tv {0, 100000};
-                int ret = select(STDIN_FILENO + 1, &rfds, nullptr, nullptr, &tv);
-                if (ret > 0 && FD_ISSET(STDIN_FILENO, &rfds)) {
-                    if (!std::getline(std::cin, line)) {
-                        running = false;
-                        break;
-                    }
-                    gotLine = true;
-                } else if (ret < 0) {
-                    running = false;
-                    break;
-                }
-            }
-
-            if (!running.load()) {
+            if (!std::getline(std::cin, line)) {
+                // stdin geschlossen (z.B. Terminal beendet)
+                running = false;
                 break;
-            }
-            if (!gotLine) {
-                continue;
             }
 
             if (line == "q" || line == "quit") {
                 running = false;
                 break;
             }
+
             try {
                 size_t newIdx = std::stoul(line);
                 if (newIdx < presets.size()) {
@@ -116,44 +95,37 @@ static void startSwitcher(const ScenarioFile& cfg, std::atomic<bool>& running) {
                 std::cout << "Invalid input" << std::endl;
             }
         }
-    } else {
-        while (running.load()) {
-            if (cfg.kill_after.count() > 0 &&
-    std::chrono::steady_clock::now() - start_time >= cfg.kill_after) {
-                running = false;
-                break;
+        return; // manueller Modus kehrt hier zurück
     }
-            auto dur = presets[idx]->hold_dur.count()
-                           ? presets[idx]->hold_dur
-                           : std::chrono::seconds(cfg.interval_seconds);
-            if (dur.count() < 0) {
-                while (running.load()) {
-                    if (cfg.kill_after.count() > 0 &&
-                        std::chrono::steady_clock::now() - start_time >= cfg.kill_after) {
-                        running = false;
-                        break;
-                        }
-                    std::this_thread::sleep_for(1s);
-                }
-                break;
-            }
-            for (int s = 0; s < dur.count() && running.load(); ++s) {
-                if (cfg.kill_after.count() > 0 &&
-                    std::chrono::steady_clock::now() - start_time >= cfg.kill_after) {
-                    running = false;
-                    break;
-                    }
+
+    // --- Automatik: ausschließlich hold_dur jeder Szene steuert die Verweildauer ---
+    while (running.load()) {
+        if (exceeded_kill_after()) { running = false; break; }
+
+        const auto dur = presets[idx]->hold_dur; // Sekunden
+
+        if (dur.count() <= 0) {
+            // unendlich verweilen bis kill_after oder Stop
+            while (running.load() && !exceeded_kill_after()) {
                 std::this_thread::sleep_for(1s);
             }
-            if (!running.load()) {
-                break;
-            }
-            idx = (idx + 1) % presets.size();
-            std::atomic_store_explicit(&gScenario, presets[idx], std::memory_order_release);
-            std::cout << "[Switcher] Scenario #" << idx << " active" << std::endl;
+            break;
         }
+
+        // genau dur Sekunden verweilen
+        for (int s = 0; s < dur.count() && running.load(); ++s) {
+            if (exceeded_kill_after()) { running = false; break; }
+            std::this_thread::sleep_for(1s);
+        }
+        if (!running.load()) break;
+
+        // nächstes Szenario
+        idx = (idx + 1) % presets.size();
+        std::atomic_store_explicit(&gScenario, presets[idx], std::memory_order_release);
+        std::cout << "[Switcher] Scenario #" << idx << " active" << std::endl;
     }
 }
+
 
 void signalHandler(int signum) {
     std::cout << "\nSignal " << signum << " received, stopping..." << std::endl;
