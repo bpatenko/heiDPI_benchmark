@@ -1,0 +1,6 @@
+confuse
+geoip2
+numpy
+pandas
+matplotlib
+seaborn

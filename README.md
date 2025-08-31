@@ -57,6 +57,8 @@ This repository contains:
 - CMake ≥ 3.10
 - C++17/20 compiler with pthreads
 - Python 3.9+ (for baseline logger & utilities)
+- Install Python packages: `pip install -r requirements.txt`
+- Third-party C++ libraries such as `yaml-cpp`, `nlohmann/json`, `json-schema-validator`, and `libmaxminddb` are fetched automatically via CMake `FetchContent_Declare`, so no manual installation is required.
 
 ### Build Steps
 
