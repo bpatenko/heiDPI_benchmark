@@ -19,7 +19,7 @@ The project compares a **Python baseline** against a **C++ port** and provides a
 
 ## Overview
 
-`heiDPI` turns Deep‑Packet‑Inspection (DPI) events into structured data.  
+`heiDPI` (https://github.com/stefanDeveloper/heiDPI) turns nDPId (https://github.com/utoni/nDPId) events into accessible structured data.  
 This repository contains:
 
 - A C++ **benchmark harness** that generates synthetic traffic and drives loggers.
@@ -33,12 +33,14 @@ This repository contains:
 
 ```
 .
-├── benchmark/                 # C++ benchmark harness + Python scripts
+├── benchmark/                 # C++ benchmark harness + heiDPI-Logger
 │   ├── src/                   # C++ implementation (generator, watcher, analyser …)
 │   ├── include/               # C++ headers
 │   ├── heiDPI_logger.py       # Python logger entry point
 │   ├── heiDPI_logger_profiler.py
 │   ├── heiDPI_logger_mock.py
+│   ├── config.json            # Config-File for benchmark tool
+│   ├── config.yml             # heiDPI-Logger related configfile
 │   └── scenarios.json         # Predefined load scenarios (IDLE, BURST, RAMP)
 ├── heidpi/                    # Python baseline (env, server, logger, JSON schemas)
 ├── heidpi_logger_cpp_port2/   # C++ logger port
