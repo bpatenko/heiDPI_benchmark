@@ -22,6 +22,7 @@ BASEDIR = Path(__file__).resolve().parent
 # Eventrate ein Label gebildet. Passen Sie die Namen ggf. an Ihre
 # Verzeichnisstruktur an.
 SCENARIOS: Dict[str, str | None] = {
+    "../benchmark_results/burst_cpp_500events": None,
     "../benchmark_results/burst_cpp_1000events": None,  # Label wird automatisch bestimmt
     "../benchmark_results/burst_cpp_2000events": None,
     "../benchmark_results/burst_cpp_4000events": None,
@@ -239,6 +240,7 @@ def plot_metric(metric_data: Dict[str, pd.DataFrame], ylabel: str, title: str, o
 
 
 def main() -> None:
+    latency_data: Dict[str, pd.DataFrame] = {}
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     # Dictionaries zur Aufnahme der aggregierten Daten pro Szenario
     cpu_data: Dict[str, pd.DataFrame] = {}
@@ -257,6 +259,10 @@ def main() -> None:
         cpu_agg = aggregate_metric_per_second(res_df, "cpu")
         mem_agg = aggregate_metric_per_second(res_df, "mem")
         proc_agg = aggregate_processed_rate(events_df)
+        # Latenz (ms) pro Sekunde aggregieren (über done_second)
+        latency_df = (events_df[["file", "done_second", "latency_ms"]]
+                      .rename(columns={"done_second": "second"}))
+        lat_agg = aggregate_metric_per_second(latency_df, "latency_ms")
         # Label bestimmen: entweder benutzerdefiniert oder automatisch
         label: str
         if custom_label:
@@ -266,16 +272,25 @@ def main() -> None:
         cpu_data[label] = cpu_agg
         mem_data[label] = mem_agg
         throughput_data[label] = proc_agg
+        latency_data[label] = lat_agg
 
     # CPU‑Plot
     if cpu_data:
-        plot_metric(cpu_data, ylabel="CPU‑Auslastung (%)", title="CPU‑Auslastung über die Zeit", output_file=OUTPUT_DIR / "cpu_usage_burstcpp.png")
+        plot_metric(cpu_data, ylabel="CPU‑Auslastung (%)", title="CPU‑Auslastung über die Zeit", output_file=OUTPUT_DIR / "cpu_usage_burstcpp_combined.png")
     # Durchsatz‑Plot
     if throughput_data:
         plot_metric(throughput_data, ylabel="Events/s (verarbeitet)", title="Verarbeiteter Durchsatz über die Zeit", output_file=OUTPUT_DIR / "throughput_burstcpp.png")
     # Speicher‑Plot
     if mem_data:
-        plot_metric(mem_data, ylabel="Speicher (MB)", title="Speicherbelegung über die Zeit", output_file=OUTPUT_DIR / "memory_usage_burstcpp.png")
+        plot_metric(mem_data, ylabel="Speicher (MB)", title="Speicherbelegung über die Zeit", output_file=OUTPUT_DIR / "memory_usage_burstcpp_combined.png")
+    # Latenz-Plot
+    if latency_data:
+        plot_metric(
+            latency_data,
+            ylabel="Latenz (ms)",
+            title="Durchschnittliche Latenz über die Zeit",
+            output_file=OUTPUT_DIR / "latency_burstcpp.png",
+        )
 
 
 if __name__ == "__main__":

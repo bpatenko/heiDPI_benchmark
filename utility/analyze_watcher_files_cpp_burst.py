@@ -30,7 +30,7 @@ def finalize_plot(output_path: Path, tight=True, dpi=150):
     plt.close()
 
 # ===== Fixed paths (no CLI arguments) =====
-BASEDIR = Path("../benchmark_results/burst_cpp_4000events")         # input directory with .json.watch files
+BASEDIR = Path("../benchmark_results/ramp_cpp_1000to6000events")         # input directory with .json.watch files
 OUTDIR  = Path("plots_cpp_combined")           # output directory for plots
 MEMORY_SOURCE = "logger"                       # "logger" or "total"
 

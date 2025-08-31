@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # ================= Einstellungen =================
-basedir = "../benchmark_results/ramp_cpp_1000to10000"   # Ordner mit .json.watch-Dateien
+basedir = "../benchmark_results/burst_cpp_5min_6000events"   # Ordner mit .json.watch-Dateien
 memory_source = "logger"           # "logger" oder "total"
 outdir = "plots"
 os.makedirs(outdir, exist_ok=True)
