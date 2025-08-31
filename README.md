@@ -72,7 +72,7 @@ cmake ..          # Fetches third‑party dependencies
 cmake --build .   # Produces the benchmark binary
 
 # Build the C++ logger port
-cd ../../heidpi_logger_cpp_port2
+cd ../../heidpi_logger_cpp_port
 mkdir build && cd build
 cmake ..
 cmake --build .   # Produces the heidpi_cpp logger
